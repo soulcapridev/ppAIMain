@@ -1,0 +1,228 @@
+{
+  "Parts": [
+    {
+      "TypeName": "Structure",
+      "ReferenceX": 3,
+      "ReferenceY": 0,
+      "ReferenceZ": 8,
+      "Height": 3,
+      "OrientationName": "Agnostic"
+    },
+    {
+      "TypeName": "Structure",
+      "ReferenceX": 2,
+      "ReferenceY": 0,
+      "ReferenceZ": 8,
+      "Height": 3,
+      "OrientationName": "Agnostic"
+    },
+    {
+      "TypeName": "Structure",
+      "ReferenceX": 3,
+      "ReferenceY": 0,
+      "ReferenceZ": 71,
+      "Height": 3,
+      "OrientationName": "Agnostic"
+    },
+    {
+      "TypeName": "Structure",
+      "ReferenceX": 2,
+      "ReferenceY": 0,
+      "ReferenceZ": 71,
+      "Height": 3,
+      "OrientationName": "Agnostic"
+    },
+    {
+      "TypeName": "Structure",
+      "ReferenceX": 3,
+      "ReferenceY": 0,
+      "ReferenceZ": 46,
+      "Height": 3,
+      "OrientationName": "Agnostic"
+    },
+    {
+      "TypeName": "Structure",
+      "ReferenceX": 2,
+      "ReferenceY": 0,
+      "ReferenceZ": 46,
+      "Height": 3,
+      "OrientationName": "Agnostic"
+    },
+    {
+      "TypeName": "Structure",
+      "ReferenceX": 2,
+      "ReferenceY": 0,
+      "ReferenceZ": 20,
+      "Height": 3,
+      "OrientationName": "Agnostic"
+    },
+    {
+      "TypeName": "Structure",
+      "ReferenceX": 3,
+      "ReferenceY": 0,
+      "ReferenceZ": 20,
+      "Height": 3,
+      "OrientationName": "Agnostic"
+    },
+    {
+      "TypeName": "Structure",
+      "ReferenceX": 2,
+      "ReferenceY": 0,
+      "ReferenceZ": 60,
+      "Height": 3,
+      "OrientationName": "Agnostic"
+    },
+    {
+      "TypeName": "Structure",
+      "ReferenceX": 3,
+      "ReferenceY": 0,
+      "ReferenceZ": 60,
+      "Height": 3,
+      "OrientationName": "Agnostic"
+    },
+    {
+      "TypeName": "Structure",
+      "ReferenceX": 36,
+      "ReferenceY": 0,
+      "ReferenceZ": 75,
+      "Height": 3,
+      "OrientationName": "Agnostic"
+    },
+    {
+      "TypeName": "Structure",
+      "ReferenceX": 35,
+      "ReferenceY": 0,
+      "ReferenceZ": 75,
+      "Height": 3,
+      "OrientationName": "Agnostic"
+    },
+    {
+      "TypeName": "Structure",
+      "ReferenceX": 36,
+      "ReferenceY": 0,
+      "ReferenceZ": 60,
+      "Height": 3,
+      "OrientationName": "Agnostic"
+    },
+    {
+      "TypeName": "Structure",
+      "ReferenceX": 35,
+      "ReferenceY": 0,
+      "ReferenceZ": 60,
+      "Height": 3,
+      "OrientationName": "Agnostic"
+    },
+    {
+      "TypeName": "Structure",
+      "ReferenceX": 36,
+      "ReferenceY": 0,
+      "ReferenceZ": 46,
+      "Height": 3,
+      "OrientationName": "Agnostic"
+    },
+    {
+      "TypeName": "Structure",
+      "ReferenceX": 35,
+      "ReferenceY": 0,
+      "ReferenceZ": 46,
+      "Height": 3,
+      "OrientationName": "Agnostic"
+    },
+    {
+      "TypeName": "Structure",
+      "ReferenceX": 36,
+      "ReferenceY": 0,
+      "ReferenceZ": 34,
+      "Height": 3,
+      "OrientationName": "Agnostic"
+    },
+    {
+      "TypeName": "Structure",
+      "ReferenceX": 35,
+      "ReferenceY": 0,
+      "ReferenceZ": 34,
+      "Height": 3,
+      "OrientationName": "Agnostic"
+    },
+    {
+      "TypeName": "Structure",
+      "ReferenceX": 36,
+      "ReferenceY": 0,
+      "ReferenceZ": 8,
+      "Height": 3,
+      "OrientationName": "Agnostic"
+    },
+    {
+      "TypeName": "Structure",
+      "ReferenceX": 35,
+      "ReferenceY": 0,
+      "ReferenceZ": 8,
+      "Height": 3,
+      "OrientationName": "Agnostic"
+    },
+    {
+      "TypeName": "Structure",
+      "ReferenceX": 35,
+      "ReferenceY": 0,
+      "ReferenceZ": 19,
+      "Height": 3,
+      "OrientationName": "Agnostic"
+    },
+    {
+      "TypeName": "Structure",
+      "ReferenceX": 36,
+      "ReferenceY": 0,
+      "ReferenceZ": 19,
+      "Height": 3,
+      "OrientationName": "Agnostic"
+    },
+    {
+      "TypeName": "Structure",
+      "ReferenceX": 19,
+      "ReferenceY": 0,
+      "ReferenceZ": 23,
+      "Height": 3,
+      "OrientationName": "Agnostic"
+    },
+    {
+      "TypeName": "Structure",
+      "ReferenceX": 19,
+      "ReferenceY": 0,
+      "ReferenceZ": 22,
+      "Height": 3,
+      "OrientationName": "Agnostic"
+    },
+    {
+      "TypeName": "Structure",
+      "ReferenceX": 18,
+      "ReferenceY": 0,
+      "ReferenceZ": 57,
+      "Height": 3,
+      "OrientationName": "Agnostic"
+    },
+    {
+      "TypeName": "Structure",
+      "ReferenceX": 18,
+      "ReferenceY": 0,
+      "ReferenceZ": 58,
+      "Height": 3,
+      "OrientationName": "Agnostic"
+    },
+    {
+      "TypeName": "Structure",
+      "ReferenceX": 2,
+      "ReferenceY": 0,
+      "ReferenceZ": 34,
+      "Height": 3,
+      "OrientationName": "Agnostic"
+    },
+    {
+      "TypeName": "Structure",
+      "ReferenceX": 3,
+      "ReferenceY": 0,
+      "ReferenceZ": 34,
+      "Height": 3,
+      "OrientationName": "Agnostic"
+    }
+  ]
+}
