@@ -224,6 +224,7 @@ public class AI_EventPlanner : MonoBehaviour
         var faces = _grid.GetFaces().Where(f => f.IsClimbable || (originFaces.Contains(f)) && f.IsActive);
         var graphFaces = faces.Select(f => new TaggedEdge<Voxel, Face>(f.Voxels[0], f.Voxels[1], f));
         var graph = graphFaces.ToUndirectedGraph<Voxel, TaggedEdge<Voxel, Face>>();
+        
 
         var start = mTask.OriginVoxel;
         var end = mTask.TargetVoxel;

@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 using System;
+using System.Linq;
 
 public class Voxel : IEquatable<Voxel>
 {
@@ -12,6 +13,8 @@ public class Voxel : IEquatable<Voxel>
     public List<Face> Faces = new List<Face>(6);
     public Part Part;
     public bool InSpace;
+    private bool IsGridBoundary => Index.x == 0 || Index.x == _grid.Size.x-1 || Index.z == 0 || Index.z == _grid.Size.z-1;
+    public bool IsBoundary => ((GetFaceNeighbours().Any(n => !n.IsActive || n.IsOccupied)) || IsGridBoundary) && IsActive && !IsOccupied;
     public PPSpace ParentSpace;
 
     VoxelGrid _grid;

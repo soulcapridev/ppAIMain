@@ -5,6 +5,7 @@ using System.Linq;
 using System.Diagnostics;
 using QuickGraph;
 using QuickGraph.Algorithms;
+using QuickGraph.Algorithms.KernighanLinAlgoritm;
 
 public class AI_DirectReconfig : MonoBehaviour
 {
@@ -45,6 +46,12 @@ public class AI_DirectReconfig : MonoBehaviour
     //List<Voxel> _toDraw = new List<Voxel>();
     //List<Color> _toColor = new List<Color>();
 
+    List<Voxel> _boundaries = new List<Voxel>();
+    List<Voxel> _spaceable = new List<Voxel>();
+    List<Voxel> _visualize = new List<Voxel>();
+
+    
+
     bool _drawTags = false;
     bool _drawPaths = false;
     bool _drawBoundaries = false;
@@ -62,7 +69,10 @@ public class AI_DirectReconfig : MonoBehaviour
         _existingParts = JSONReader.ReadPartsAsList(_grid, "Input Data/StructureParts");
 
         PopulateRandomConfigurable(50);
-        BruteForceSpaces();
+        DefineBoundaries_T02();
+        //GetSpaceable();
+        //GetBoundaries();
+        //BruteForceSpaces();
 
         //RemoveSmallSpaces();
     }
@@ -72,15 +82,254 @@ public class AI_DirectReconfig : MonoBehaviour
         DrawState();
         if (Input.GetKeyDown(KeyCode.T)) _drawTags = !_drawTags;
         if (Input.GetKeyDown(KeyCode.B)) _drawBoundaries = !_drawBoundaries;
+        DrawVisualize();
 
-        if (_drawPaths) Drawing.DrawMesh(false, _meshes);
+        //DrawSpaceable();
+        //DrawGeneralBoundaries();
+
+        //if (_drawPaths) Drawing.DrawMesh(false, _meshes);
         //Drawing.DrawVoxelColor(_toDraw, _toColor, _voxelSize);
 
         //if (_drawBoundaries) DrawSpaceBoundaries();
         //else Drawing.DrawSpaces(_toRemove, _grid);  
 
-        if (_drawBoundaries) DrawSpaceBoundaries();
-        else Drawing.DrawSpaces(_spaces, _grid);
+        //if (_drawBoundaries) DrawSpaceBoundaries();
+        //else Drawing.DrawSpaces(_spaces, _grid);
+    }
+
+    void DefineBoundaries_T02()
+    {
+        Stopwatch stopwatch = new Stopwatch();
+        stopwatch.Start();
+
+        //List of walkable voxels
+        var walkable = _grid.ActiveVoxelsAsList().Where(v => !v.IsOccupied);
+
+        //Algorithm constraints
+        int breadthLevels = 10;
+        int pathMaximumLength = 8;
+
+        //Paralell lists containing the connected parts and the paths lenghts
+        //This is later used to make that only the shortest connection between 2 parts is maintained
+        List<Part[]> connectedParts = new List<Part[]>();
+        List<HashSet<Voxel>> connectionPaths = new List<HashSet<Voxel>>();
+        List<int> connectionLenghts = new List<int>();
+
+        //Iterate through every existing part that is not structural 
+        foreach (var part in _existingParts.Where(p => p.Type != PartType.Structure))
+        {
+            var t1 = part.OccupiedVoxels.First();
+            var t2 = part.OccupiedVoxels.Last();
+
+            var origins = new Voxel[] { t1, t2 };
+
+            //BFS (inspired) algorithm, exploring the grid through levels
+            foreach (var origin in origins)
+            {
+                //Queue used to explore levels
+                Queue<Voxel> currentLevel = new Queue<Voxel>();
+                currentLevel.Enqueue(origin);
+
+                //List to keep track of voxels that have been visited
+                List<Voxel> visited = new List<Voxel>();
+                List<Voxel> toProcess = new List<Voxel>();
+                //List to store the parts that have been found
+                List<Part> foundParts = new List<Part>();
+
+                for (int i = 0; i < breadthLevels; i++)
+                {
+                    Queue<Voxel> nextLevel = new Queue<Voxel>();
+                    while (currentLevel.Count > 0)
+                    {
+                        var voxel = currentLevel.Dequeue();
+                        visited.Add(voxel);
+                        var neighbours = voxel.GetFaceNeighbours().Where(n => n.IsActive && !visited.Contains(n));
+                        foreach (var neighbour in neighbours)
+                        {
+                            nextLevel.Enqueue(neighbour);
+                            if (!toProcess.Contains(neighbour) && neighbour.IsOccupied && neighbour.Part != part && !foundParts.Contains(neighbour.Part))
+                            {
+                                var foundPart = neighbour.Part;
+                                foundParts.Add(foundPart);
+                                toProcess.Add(neighbour);
+                            }
+                        }
+                    }
+                    currentLevel = nextLevel;
+                }
+                //Make copy of walkable voxels for this origin voxel
+                var localWalkable = new List<Voxel>(walkable);
+                localWalkable.Add(origin);
+
+                //Find the closest voxel in the neighbouring parts
+                //Add it to the localWalkable list
+                List<Voxel> partsTargets = new List<Voxel>();
+                foreach (var nPart in foundParts)
+                {
+                    var nIndices = nPart.OccupiedIndexes;
+                    var closestIndex = new Vector3Int();
+                    float minDistance = Mathf.Infinity;
+                    foreach (var index in nIndices)
+                    {
+                        var distance = Vector3Int.Distance(origin.Index, index);
+                        if (distance < minDistance)
+                        {
+                            closestIndex = index;
+                            minDistance = distance;
+                        }
+                    }
+                    if (closestIndex == null) print("distance measurement failed");
+                    var closestVoxel = _grid.Voxels[closestIndex.x, closestIndex.y, closestIndex.z];
+                    partsTargets.Add(closestVoxel);
+                    localWalkable.Add(closestVoxel);
+                }
+
+                //Construct graph with walkable voxels and targets to be processed
+                var faces = _grid.GetFaces().Where(f => localWalkable.Contains(f.Voxels[0]) && localWalkable.Contains(f.Voxels[1]));
+                var graphFaces = faces.Select(f => new TaggedEdge<Voxel, Face>(f.Voxels[0], f.Voxels[1], f));
+                var graph = graphFaces.ToUndirectedGraph<Voxel, TaggedEdge<Voxel, Face>>();
+
+                var start = origin;
+                foreach (var v in partsTargets)
+                {
+                    var end = v;
+                    var shortest = graph.ShortestPathsDijkstra(e => 1.0, start);
+                    if(shortest(end, out var endPath))
+                    {
+                        var endPathVoxels = new HashSet<Voxel>(endPath.SelectMany(e => new[] { e.Source, e.Target }));
+                        var pathLength = endPathVoxels.Count;
+                        if (pathLength <= pathMaximumLength
+                            && !endPathVoxels.All(ev => ev.IsOccupied)
+                            && endPathVoxels.Count(ev => ev.GetFaceNeighbours().Any(evn => evn.IsOccupied)) > 2
+                            && true)
+                        {
+                            var isUnique = !connectedParts.Any(cp => cp.Contains(part) && cp.Contains(end.Part));
+                            if (!isUnique)
+                            {
+                                print("found duplicated path");
+                                var existingConnection = connectedParts.First(cp => cp.Contains(part) && cp.Contains(end.Part));
+                                var index = connectedParts.IndexOf(existingConnection);
+                                var existingLength = connectionLenghts[index];
+                                if (pathLength > existingLength) continue;
+                                else
+                                {
+                                    //Replace existing conection
+                                    connectedParts[index] = new Part[] { part, end.Part };
+                                    connectionLenghts[index] = pathLength;
+                                    connectionPaths[index] = endPathVoxels;  
+                                }
+                            }
+                            else
+                            {
+                                //Create new connection
+                                connectedParts.Add(new Part[] { part, end.Part });
+                                connectionLenghts.Add(pathLength);
+                                connectionPaths.Add(endPathVoxels);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        foreach (var path in connectionPaths)
+        {
+            foreach (var voxel in path)
+            {
+                if(!voxel.IsOccupied && !_visualize.Contains(voxel)) _visualize.Add(voxel);
+            }
+        }
+        stopwatch.Stop();
+        print($"Took {stopwatch.ElapsedMilliseconds}ms to Process");
+    }
+
+
+
+
+
+    void DefineBoundaries_T01()
+    {
+        Stopwatch stopwatch = new Stopwatch();
+        stopwatch.Start();
+
+        //List of walkable voxels
+        var walkable = _grid.ActiveVoxelsAsList().Where(v => !v.IsOccupied);
+
+        int breadthLevels = 6;
+        foreach (var part in _existingParts.Where(p => p.Type != PartType.Structure))
+        {
+            var t1 = part.OccupiedVoxels.First();
+            var t2 = part.OccupiedVoxels.Last();
+
+            var origins = new Voxel[] { t1, t2 };
+
+            //BFS (inspired) algorithm  [THIS SHOULD BE REFACTORED INTO A METHOD]
+            foreach (var origin in origins)
+            {
+                Queue<Voxel> currentLevel = new Queue<Voxel>();
+                currentLevel.Enqueue(origin);
+
+                List<Voxel> visited = new List<Voxel>();
+                List<Voxel> toProcess = new List<Voxel>();
+
+                for (int i = 0; i < breadthLevels; i++)
+                {
+                    Queue<Voxel> nextLevel = new Queue<Voxel>();
+                    while (currentLevel.Count > 0)
+                    {
+                        var voxel = currentLevel.Dequeue();
+                        visited.Add(voxel);
+                        var neighbours = voxel.GetFaceNeighbours().Where(n => n.IsActive && !visited.Contains(n));
+                        foreach (var neighbour in neighbours)
+                        {
+                            nextLevel.Enqueue(neighbour);
+                            if(!toProcess.Contains(neighbour) && neighbour.IsOccupied && neighbour.Part != part) toProcess.Add(neighbour);
+                        }
+                    }
+                    currentLevel = nextLevel;
+                }
+                var localWalkable = new List<Voxel>(walkable);
+                localWalkable.Add(origin);
+                foreach (var v in toProcess)
+                {
+                    localWalkable.Add(v);
+                    //_visualize.Add(v);
+                }
+                
+                
+                //Construct graph with walkable voxels and targets to process
+                var faces = _grid.GetFaces().Where(f => /*f.IsClimbable &&*/ localWalkable.Contains(f.Voxels[0]) && localWalkable.Contains(f.Voxels[1]));
+                var graphFaces = faces.Select(f => new TaggedEdge<Voxel, Face>(f.Voxels[0], f.Voxels[1], f));
+                var graph = graphFaces.ToUndirectedGraph<Voxel, TaggedEdge<Voxel, Face>>();
+
+
+                var start = origin;
+                foreach (var v in toProcess)
+                {
+                    var end = v;
+                    var shortest = graph.ShortestPathsDijkstra(e => 1.0, start);
+                    shortest(end, out var endPath);
+                    var endPathVoxels = new HashSet<Voxel>(endPath.SelectMany(e => new[] { e.Source, e.Target }));
+                    foreach (var ev in endPathVoxels) _visualize.Add(ev);
+                    print($"Found path with {endPathVoxels.Count()} voxels");
+                }
+
+            }
+        }
+        stopwatch.Stop();
+        print($"Took {stopwatch.ElapsedMilliseconds}ms to Process");
+    }
+
+    void GetSpaceable()
+    {
+        _spaceable = _grid.ActiveVoxelsAsList().Where(v => !v.IsOccupied && !v.InSpace).ToList();
+    }
+
+    void GetBoundaries()
+    {
+        //var boundaryVoxels = _grid.ActiveVoxelsAsList().Where(v => v.IsBoundary);
+        var boundaryVoxels = _grid.ActiveVoxelsAsList().Where(v => !v.IsBoundary && !v.IsOccupied);
+        _boundaries = boundaryVoxels.ToList();
     }
 
     //IEnumerator SaveScreenshot()
@@ -123,6 +372,7 @@ public class AI_DirectReconfig : MonoBehaviour
 
     void RemoveSmallSpaces()
     {
+        //YOU ARE BREAKING ME BRO
         // NEEDS WORK ON IT! DETECTION IS OK, MODIFICATION IS NOT
         _clean = new List<PPSpace>(_spaces);
         int count = 0;
@@ -147,7 +397,7 @@ public class AI_DirectReconfig : MonoBehaviour
                     {
                         print("isolated found");
                         _isolated.Add(space);
-                        _spaces.Remove(space);
+                        //_spaces.Remove(space);
                         a--;
                         continue;
                     }
@@ -171,7 +421,6 @@ public class AI_DirectReconfig : MonoBehaviour
             }
         }
         print($"{count} spaces removed");
-        
     }
 
 
@@ -187,11 +436,17 @@ public class AI_DirectReconfig : MonoBehaviour
         print($"Took {stopwatch.ElapsedMilliseconds}ms to Generate {_spaces.Count} Spaces");
     }
 
-  
+
+    void DrawVisualize()
+    {
+        foreach (var voxel in _visualize)
+        {
+            Drawing.DrawCubeTransparent(voxel.Center + new Vector3(0f, _voxelSize, 0f), _voxelSize);
+        }
+    }
 
     void GenerateSpace()
     {
-        
         int minimumArea = 100; //in voxel ammount
         var availableVoxels = _grid.ActiveVoxelsAsList().Where(v => !v.IsOccupied && !v.InSpace).ToList();
         if (availableVoxels.Count == 0) return;
@@ -233,6 +488,22 @@ public class AI_DirectReconfig : MonoBehaviour
             }   
         }
         _spaces.Add(space);        
+    }
+
+    void DrawSpaceable()
+    {
+        foreach (var voxel in _spaceable)
+        {
+            Drawing.DrawCubeTransparent(voxel.Center + new Vector3(0f, _voxelSize, 0f), _voxelSize);
+        }
+    }
+
+    void DrawGeneralBoundaries()
+    {
+        foreach (var boundaryVoxel in _boundaries)
+        {
+            Drawing.DrawCubeTransparent(boundaryVoxel.Center + new Vector3(0f, _voxelSize, 0f), _voxelSize);
+        }
     }
 
     void DrawSpaceBoundaries()
@@ -310,110 +581,13 @@ public class AI_DirectReconfig : MonoBehaviour
         GUI.skin = _skin;
         GUI.depth = 2;
         int leftPad = 20;
-        int topPad = 200;
-        int fieldHeight = 25;
-        int fieldTitleWidth = 110;
-        int textFieldWidth = 125;
-        int numberFieldWidth = 125;
-        int i = 1;
 
         //Draw Part tags
         DrawTags();
         //Logo
         GUI.DrawTexture(new Rect(leftPad, -10, 128, 128), Resources.Load<Texture>("Textures/PP_Logo"));
 
-        //Background Transparency
-        //GUI.Box(new Rect(leftPad, topPad - 75, (fieldTitleWidth * 2) + (leftPad * 3), (fieldHeight * 25) + 10), Resources.Load<Texture>("Textures/PP_TranspBKG"), "backgroundTile");
-
         //Title
         GUI.Box(new Rect(180, 30, 500, 25), "AI Plan Analyser", "title");
-
-        //Setup title
-        //GUI.Box(new Rect(leftPad, topPad - 40, fieldTitleWidth, fieldHeight + 10), "Event Setup", "partsTitle");
-
-        //Event Name field
-        //GUI.Box(new Rect(leftPad, topPad, fieldTitleWidth, fieldHeight), "Event Name", "fieldTitle");
-        //_eventName = GUI.TextField(new Rect((leftPad * 2) + fieldTitleWidth, topPad, textFieldWidth, fieldHeight), _eventName, 100);
-
-        //Number of People field
-        //GUI.Box(new Rect(leftPad, topPad + ((fieldHeight + 10) * i), fieldTitleWidth, fieldHeight), "Population", "fieldTitle");
-        //_eventPopulation = GUI.TextField(new Rect((leftPad * 2) + fieldTitleWidth, topPad + ((fieldHeight + 10) * 1), numberFieldWidth, fieldHeight), _eventPopulation, 100);
-
-        //i += 2;
-        //Parts fields
-        //GUI.Box(new Rect(leftPad, topPad + ((fieldHeight + 10) * i++), fieldTitleWidth, fieldHeight + 10), "Parts Required", "partsTitle");
-
-        //GUI.Box(new Rect(leftPad, topPad + ((fieldHeight + 10) * i), fieldTitleWidth, fieldHeight), "Toilet #", "fieldTitle");
-        //_eventToiletCount = GUI.TextField(new Rect((leftPad * 2) + fieldTitleWidth, topPad + ((fieldHeight + 10) * i++), numberFieldWidth, fieldHeight), _eventToiletCount, 100);
-
-        //GUI.Box(new Rect(leftPad, topPad + ((fieldHeight + 10) * i), fieldTitleWidth, fieldHeight), "Toilet Sink #", "fieldTitle");
-        //_eventWCSinkCount = GUI.TextField(new Rect((leftPad * 2) + fieldTitleWidth, topPad + ((fieldHeight + 10) * i++), numberFieldWidth, fieldHeight), _eventWCSinkCount, 100);
-
-        //GUI.Box(new Rect(leftPad, topPad + ((fieldHeight + 10) * i), fieldTitleWidth, fieldHeight), "Shower #", "fieldTitle");
-        //_eventShowerCount = GUI.TextField(new Rect((leftPad * 2) + fieldTitleWidth, topPad + ((fieldHeight + 10) * i++), numberFieldWidth, fieldHeight), _eventShowerCount, 100);
-
-        //GUI.Box(new Rect(leftPad, topPad + ((fieldHeight + 10) * i), fieldTitleWidth, fieldHeight), "Oven #", "fieldTitle");
-        //_eventKitchenOvenCount = GUI.TextField(new Rect((leftPad * 2) + fieldTitleWidth, topPad + ((fieldHeight + 10) * i++), numberFieldWidth, fieldHeight), _eventKitchenOvenCount, 100);
-
-        //GUI.Box(new Rect(leftPad, topPad + ((fieldHeight + 10) * i), fieldTitleWidth, fieldHeight), "Stove #", "fieldTitle");
-        //_eventKitchenStoveCount = GUI.TextField(new Rect((leftPad * 2) + fieldTitleWidth, topPad + ((fieldHeight + 10) * i++), numberFieldWidth, fieldHeight), _eventKitchenStoveCount, 100);
-
-        //GUI.Box(new Rect(leftPad, topPad + ((fieldHeight + 10) * i), fieldTitleWidth, fieldHeight), "Kitchen Top #", "fieldTitle");
-        //_eventKitchenTopCount = GUI.TextField(new Rect((leftPad * 2) + fieldTitleWidth, topPad + ((fieldHeight + 10) * i++), numberFieldWidth, fieldHeight), _eventKitchenTopCount, 100);
-
-        //GUI.Box(new Rect(leftPad, topPad + ((fieldHeight + 10) * i), fieldTitleWidth, fieldHeight), "Kitchen Sink #", "fieldTitle");
-        //_eventKitchenSinkCount = GUI.TextField(new Rect((leftPad * 2) + fieldTitleWidth, topPad + ((fieldHeight + 10) * i++), numberFieldWidth, fieldHeight), _eventKitchenSinkCount, 100);
-
-        //Event pop-up window
-        //GUI.Window(0, new Rect(Screen.width - leftPad - 300, topPad - 75, 300, (fieldHeight * 25) + 10), PopUpEventWindow, "Your event Tasks");
-
-
-
-
-        //Run Button
-        //if (GUI.Button(new Rect(leftPad, topPad + ((fieldHeight + 10) * i++), (fieldTitleWidth + leftPad + textFieldWidth), fieldHeight), "Generate Event"))
-        //{
-        //    //GenerateEvent();
-        //}
-
-        //Output Message
-        //GUI.Box(new Rect(leftPad, (topPad) + ((fieldHeight + 10) * i++), (fieldTitleWidth + leftPad + textFieldWidth), fieldHeight), _outputMessage, "fieldTitle");
-
-    }
-    void PopUpEventWindow(int windowID)
-    {
-
-        GUIStyle style = _skin.GetStyle("taskTitle");
-        int leftPad = 10;
-        int topPad = 10;
-        int fieldWidth = 200;
-        int fieldHeight = 20;
-        int buttonWidth = 50;
-        if (_eventTasks.Count == 0)
-        {
-            GUI.Box(new Rect(leftPad, topPad, fieldWidth, fieldHeight), "You have no Tasks!", style);
-        }
-        else
-        {
-            float cummulativeHeight = topPad;
-            for (int i = 0; i < _eventTasks.Count; i++)
-            {
-                var mTask = _eventTasks[i];
-                GUIContent tTitle = new GUIContent();
-                tTitle.text = mTask.taskTitle;
-                float bHeight = style.CalcHeight(tTitle, fieldWidth);
-
-                Rect taskRect = new Rect(leftPad, cummulativeHeight, fieldWidth, bHeight);
-                GUI.Box(taskRect, tTitle, style);
-                cummulativeHeight += bHeight + (topPad * 2);
-
-                Rect pathButton = new Rect(taskRect.xMax + leftPad, taskRect.y, buttonWidth, bHeight);
-                if (GUI.Button(pathButton, "Path"))
-                {
-                    //CalculatePPTaskShortestPath(mTask);
-                    _drawPaths = true;
-                }
-            }
-        }
     }
 }
