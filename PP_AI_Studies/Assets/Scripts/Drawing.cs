@@ -10,8 +10,12 @@ class Drawing : MonoBehaviour
     [SerializeField]
     Material _transparent = null;
 
+    static Texture _wood;
+    static Material _woodM;
+
     static Drawing _instance;
     Material _black;
+
     static Gradient _gradient = new Gradient();
 
     //Mesh _box;
@@ -33,6 +37,9 @@ class Drawing : MonoBehaviour
         var texture = GradientTexture();
         _opaque.mainTexture = texture;
         _transparent.mainTexture = texture;
+
+        //_wood = Resources.Load<Texture>("Textures/OSB");
+        _woodM = Resources.Load<Material>("Materials/Wood");
 
         _black = new Material(Shader.Find("Unlit/Color"));
         _black.color = Color.black;
@@ -108,6 +115,24 @@ class Drawing : MonoBehaviour
                 );
 
         Graphics.DrawMesh(_unitBox, matrix, _instance._opaque, 0, null, 0, _properties);
+    }
+
+    public static void DrawConfigurable(Vector3 center, float size, float t = 0)
+    {
+        //var color = _gradient.Evaluate(t);
+        //var color = new Color(0.9f, 0.9f, 0.9f);
+        //_properties.SetColor("_Color", color);
+        //_properties.SetTexture("_Texture", _wood);
+        
+
+        var matrix = Matrix4x4.TRS(
+                center,
+                Quaternion.identity,
+                Vector3.one * (size * 0.99f)
+                );
+
+        //Graphics.DrawMesh(_unitBox, matrix, _instance._opaque, 0, null, 0, _properties);
+        Graphics.DrawMesh(_unitBox, matrix, _woodM, 0);
     }
 
     public static void DrawCubeTransparent(Vector3 center, float size)

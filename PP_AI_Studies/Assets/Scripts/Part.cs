@@ -21,7 +21,8 @@ public class Part : System.IEquatable<Part>
     public int ReferenceZ;
     public string OrientationName;
 
-    int nVoxels => Size.x > Size.y ? Size.x : Size.y;
+    //int nVoxels => Size.x > Size.y ? Size.x : Size.y;
+    int nVoxels => Size.x * Size.y;
     
     VoxelGrid _grid;
     public Voxel OriginVoxel => _grid.Voxels[ReferenceIndex.x, ReferenceIndex.y, ReferenceIndex.z];
@@ -36,7 +37,9 @@ public class Part : System.IEquatable<Part>
         p.ReferenceIndex = new Vector3Int(ReferenceX, ReferenceY, ReferenceZ);
         p.Orientation = (PartOrientation)System.Enum.Parse(typeof(PartOrientation), OrientationName, false);
         p._grid = grid;
-        p.SizeByType();
+        //p.SizeByType();
+        p.Size = SizeByType2[p.Type];
+        p.IsStatic = MoveableByType[p.Type];
         p.GetOccupiedIndexes();
         p.OccupyVoxels();
 
@@ -61,7 +64,9 @@ public class Part : System.IEquatable<Part>
 
             bool allInside = true;
 
-            SizeByType();
+            //SizeByType();
+            Size = SizeByType2[Type];
+            IsStatic = MoveableByType[Type];
             GetOccupiedIndexes();
             foreach (var index in OccupiedIndexes)
             {
@@ -85,11 +90,12 @@ public class Part : System.IEquatable<Part>
 
     public Part NewRandomConfigurable(VoxelGrid grid, List<Part> existingParts)
     {
+        Random.InitState(5);
         _grid = grid;
         Part p = new Part();
         bool validPart = false;
 
-        int minimumDistance = 4; //In voxels
+        int minimumDistance = 6; //In voxels
 
         while (!validPart)
         {
@@ -103,7 +109,9 @@ public class Part : System.IEquatable<Part>
 
             bool allInside = true;
 
-            SizeByType();
+            //SizeByType();
+            Size = SizeByType2[Type];
+            IsStatic = MoveableByType[Type];
             GetOccupiedIndexes();
             if (!CheckDistance(existingParts, minimumDistance)) continue;
 
@@ -129,6 +137,7 @@ public class Part : System.IEquatable<Part>
 
     bool CheckDistance(List<Part> existingParts, int minimumDistance)
     {
+        //SHOULD BE RE-EVALUATED TO KEEP DISTANCE CONSIDERING THE THICKNESS OF THE PARTS
         if (existingParts.Any())
         {
             foreach (var ePart in existingParts)
@@ -179,22 +188,56 @@ public class Part : System.IEquatable<Part>
 
     void GetOccupiedIndexes()
     {
-        OccupiedIndexes = new Vector3Int[nVoxels];
-        for (int i = 0; i < nVoxels; i++)
+        //THIS NEEDS TO BE REVISED AND SIMPLIFIED
+        if (Type != PartType.Configurable)
         {
+            OccupiedIndexes = new Vector3Int[nVoxels];
+            for (int i = 0; i < nVoxels; i++)
+            {
+
+                if (Orientation == PartOrientation.Horizontal)
+                {
+                    OccupiedIndexes[i] = new Vector3Int(ReferenceIndex.x + i, ReferenceIndex.y, ReferenceIndex.z);
+                }
+                else if (Orientation == PartOrientation.Vertical)
+                {
+                    OccupiedIndexes[i] = new Vector3Int(ReferenceIndex.x, ReferenceIndex.y, ReferenceIndex.z + i);
+                }
+                else if (Orientation == PartOrientation.Agnostic)
+                {
+                    OccupiedIndexes[i] = new Vector3Int(ReferenceIndex.x, ReferenceIndex.y, ReferenceIndex.z);
+                }
+            }
+        }
+        else
+        {
+            OccupiedIndexes = new Vector3Int[Size.x * Size.y];
             if (Orientation == PartOrientation.Horizontal)
             {
-                OccupiedIndexes[i] = new Vector3Int(ReferenceIndex.x + i, ReferenceIndex.y, ReferenceIndex.z);
+                int i = 0;
+                for (int x = 0; x < Size.x; x++)
+                {
+                    for (int z = 0; z < Size.y; z++)
+                    {
+                        OccupiedIndexes[i++] = new Vector3Int(ReferenceIndex.x + x, ReferenceIndex.y, ReferenceIndex.z + z);
+                    }
+                }
+
             }
             else if (Orientation == PartOrientation.Vertical)
             {
-                OccupiedIndexes[i] = new Vector3Int(ReferenceIndex.x, ReferenceIndex.y, ReferenceIndex.z + i);
+                int i = 0;
+                for (int x = 0; x < Size.y; x++)
+                {
+                    for (int z = 0; z < Size.x; z++)
+                    {
+                        OccupiedIndexes[i++] = new Vector3Int(ReferenceIndex.x + x, ReferenceIndex.y, ReferenceIndex.z + z);
+                    }
+                }
             }
-            else if (Orientation == PartOrientation.Agnostic)
-            {
-                OccupiedIndexes[i] = new Vector3Int(ReferenceIndex.x, ReferenceIndex.y, ReferenceIndex.z);
-            }
+
         }
+
     }
 
     void CalculateCenter()
@@ -205,46 +248,39 @@ public class Part : System.IEquatable<Part>
         Center = new Vector3(avgX, avgY, avgZ);
     }
 
-    void SizeByType()
+    Dictionary<PartType, Vector2Int> SizeByType2 = new Dictionary<PartType, Vector2Int>() 
     {
-        if (Type == PartType.Bedroom)
-        {
-            IsStatic = false;
-            Size = new Vector2Int(3, 1);
-        }
-        else if (Type == PartType.Shower || Type == PartType.WCSink || Type == PartType.Toilet)
-        {
-            IsStatic = false;
-            Size = new Vector2Int(1, 1);
-        }
-        else if (Type == PartType.KitchenOven || Type == PartType.KitchenSink || Type == PartType.KitchenStove || Type == PartType.KitchenTop)
-        {
-            IsStatic = false;
-            Size = new Vector2Int(1, 1);
-        }
-        else if (Type == PartType.Laundry)
-        {
-            IsStatic = true;
-            Size = new Vector2Int(3, 1);
-        }
-        else if (Type == PartType.Structure)
-        {
-            IsStatic = true;
-            Size = new Vector2Int(1, 1);
-        }
+        { PartType.Structure, new Vector2Int(1, 1) },
+        { PartType.Configurable, new Vector2Int(6, 2) },
+        //These are obsolete
+        { PartType.Bedroom, new Vector2Int(3, 1) },
+        { PartType.Shower, new Vector2Int(1, 1) },
+        { PartType.WCSink, new Vector2Int(1, 1) },
+        { PartType.Toilet, new Vector2Int(1, 1) },
+        { PartType.KitchenOven, new Vector2Int(1, 1) },
+        { PartType.KitchenSink, new Vector2Int(1, 1) },
+        { PartType.KitchenStove, new Vector2Int(1, 1) },
+        { PartType.KitchenTop, new Vector2Int(1, 1) },
+        { PartType.Laundry, new Vector2Int(3, 1) },
+        { PartType.Dumb, new Vector2Int(3, 1) }
+    };
 
-        else if (Type == PartType.Dumb)
-        {
-            IsStatic = false;
-            Size = new Vector2Int(3, 1);
-        }
-
-        else if (Type == PartType.Configurable)
-        {
-            IsStatic = false;
-            Size = new Vector2Int(6, 1);
-        }
-    }
+    Dictionary<PartType, bool> MoveableByType = new Dictionary<PartType, bool>()
+    {
+        { PartType.Structure, true },
+        { PartType.Configurable, false },
+        //These are obsolete
+        { PartType.Bedroom, false },
+        { PartType.Shower, false },
+        { PartType.WCSink, false },
+        { PartType.Toilet, false },
+        { PartType.KitchenOven, false },
+        { PartType.KitchenSink, false },
+        { PartType.KitchenStove, false },
+        { PartType.KitchenTop, false },
+        { PartType.Laundry, false },
+        { PartType.Dumb, false }
+    };
 
     public bool Equals(Part other)
     {

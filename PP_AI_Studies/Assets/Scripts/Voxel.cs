@@ -45,6 +45,37 @@ public class Voxel : IEquatable<Voxel>
         if (z != s.z - 1) yield return _grid.Voxels[x, y, z + 1];
     }
 
+    public List<Voxel> GetNeighboursInRange(int radius)
+    {
+        List<Voxel> neighbours = new List<Voxel>();
+        int x = Index.x;
+        int y = Index.y;
+        int z = Index.z;
+        var s = _grid.Size;
+
+        int xUnder = x - radius;
+        int xUpper = x + radius;
+        
+        if (xUnder < 0) xUnder = 0;
+        if (xUpper > s.x) xUpper = s.x;
+
+        int zUnder = z - radius;
+        int zUpper = z + radius;
+
+        if (zUnder < 0) zUnder = 0;
+        if (zUpper > s.z) zUpper = s.z;
+
+        for (int i = xUnder; i < xUpper; i++)
+        {
+            for (int j = zUnder; j < zUpper; j++)
+            {
+                var n = _grid.Voxels[i, y, j];
+                if(n.IsActive) neighbours.Add(n);
+            }
+        }
+        return neighbours;
+    }
+
     public PPSpace MoveToSpace(PPSpace target)
     {
         target.Voxels.Add(this);

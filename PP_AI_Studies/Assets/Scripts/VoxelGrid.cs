@@ -76,6 +76,25 @@ public class VoxelGrid
         return outList;
     }
 
+    public void ClearGrid()
+    {
+        for (int x = 0; x < Size.x; x++)
+        {
+            for (int y = 0; y < Size.y; y++)
+            {
+                for (int z = 0; z < Size.z; z++)
+                {
+                    var v = Voxels[x, y, z];
+                    if (v.IsActive && v.IsOccupied && v.Part.Type != PartType.Structure)
+                    {
+                        v.IsOccupied = false;
+                        v.Part = null;
+                    }
+                }
+            }
+        }
+    }
+
     // Get faces (from https://github.com/ADRC4/Voxel)
     public IEnumerable<Face> GetFaces()
     {
