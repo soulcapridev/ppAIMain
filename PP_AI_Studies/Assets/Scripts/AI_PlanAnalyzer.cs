@@ -23,6 +23,7 @@ public class AI_PlanAnalyzer : MonoBehaviour
     List<PPSpace> _spaces = new List<PPSpace>();
     List<Voxel> _partsBoundaries = new List<Voxel>();
     List<Voxel> _toDraw = new List<Voxel>();
+    List<Voxel[]> _origins = new List<Voxel[]>();
     List<Color> _toColor = new List<Color>();
 
     bool _drawTags = false;
@@ -40,17 +41,24 @@ public class AI_PlanAnalyzer : MonoBehaviour
         //Read CSV to create the floor
         CSVReader.SetGridState(_grid, "Input Data/FloorLayout");
         //Read JSON to create structural parts
-        _existingParts = JSONReader.ReadPartsAsList(_grid, "Input Data/StructureParts");
+        //_existingParts = JSONReader.ReadPartsAsList(_grid, "Input Data/StructureParts");
+        var newParts = JSONReader.ReadStructureAsList(_grid, "Input Data/StructureParts_R01");
+        foreach (var item in newParts)
+        {
+            _existingParts.Add(item);
+        }
     }
 
     void Update()
     {
         DrawState();
         DrawPartsBoundaries();
+        DrawOrigins();
         //Use T to toggle the visibility of the components type tags
-        //StartCoroutine(SaveScreenshot());
         if (Input.GetKeyDown(KeyCode.T)) _drawTags = !_drawTags;
         Drawing.DrawVoxelColor(_toDraw, _toColor, _voxelSize);
+        //StartCoroutine(SaveScreenshot());
+
     }
 
     IEnumerator SaveScreenshot()
@@ -90,11 +98,11 @@ public class AI_PlanAnalyzer : MonoBehaviour
         int partsProcessing = 0;
         int graphProcessing = 0;
         //List of walkable voxels
-        var walkable = _grid.ActiveVoxelsAsList().Where(v => !v.IsOccupied);
+
 
         //Algorithm constraints
-        int breadthLevels = 20;
-        int pathMaximumLength = 25;
+        int breadthLevels = 15;
+        int pathMaximumLength = 15;
 
         //Paralell lists containing the connected parts and the paths lenghts
         //This is later used to make that only the shortest connection between 2 parts is maintained
@@ -111,52 +119,13 @@ public class AI_PlanAnalyzer : MonoBehaviour
             var t2 = part.OccupiedVoxels.Last();
 
             var origins = new Voxel[] { t1, t2 };
+            _origins.Add(origins);
 
             //BFS (inspired) algorithm, exploring the grid through levels
             foreach (var origin in origins)
             {
-                //Queue used to explore levels
-                Queue<Voxel> currentLevel = new Queue<Voxel>();
-                currentLevel.Enqueue(origin);
-
-                //List to keep track of voxels that have been visited
-                List<Voxel> visited = new List<Voxel>();
-                List<Voxel> toProcess = new List<Voxel>();
-                //List to store search range
-                //This is used to reduce the area the ShortestPath algorithm needs to look
-                
-
                 //List to store the parts that have been found
                 List<Part> foundParts = new List<Part>();
-
-
-
-
-                //Navigate through the neighbours through levels ORIGINAL ATTEMPT (16SEG)
-                //List<Voxel> searchRange = new List<Voxel>() { origin };
-                //for (int i = 0; i < breadthLevels; i++)
-                //{
-                //    Queue<Voxel> nextLevel = new Queue<Voxel>();
-                //    while (currentLevel.Count > 0)
-                //    {
-                //        var voxel = currentLevel.Dequeue();
-                //        visited.Add(voxel);
-                //        var neighbours = voxel.GetFaceNeighbours().Where(n => n.IsActive && !visited.Contains(n));
-                //        foreach (var neighbour in neighbours)
-                //        {
-                //            if (!searchRange.Contains(neighbour)) searchRange.Add(neighbour);
-                //            nextLevel.Enqueue(neighbour);
-                //            //Only add neighbour(and its part) if it hasn't been processed before
-                //            if (!toProcess.Contains(neighbour) && neighbour.IsOccupied && neighbour.Part != part && !foundParts.Contains(neighbour.Part))
-                //            {
-                //                var foundPart = neighbour.Part;
-                //                foundParts.Add(foundPart);
-                //                toProcess.Add(neighbour);
-                //            }
-                //        }
-                //    }
-                //    currentLevel = nextLevel;
-                //}
 
                 //Navigate through the neighbours through levels SECOND ATTEMPT (2ms)
                 var neighbours = origin.GetNeighboursInRange(breadthLevels);
@@ -194,7 +163,7 @@ public class AI_PlanAnalyzer : MonoBehaviour
                     partsTargets.Add(closestVoxel);
                     localWalkable.Add(closestVoxel);
                 }
-                
+
                 partStopwatch.Stop();
                 partsProcessing += (int)partStopwatch.ElapsedMilliseconds;
 
@@ -206,25 +175,21 @@ public class AI_PlanAnalyzer : MonoBehaviour
                 var graphFaces = faces.Select(f => new TaggedEdge<Voxel, Face>(f.Voxels[0], f.Voxels[1], f));
                 var start = origin;
 
-                //var graph = graphFaces.ToUndirectedGraph<Voxel, TaggedEdge<Voxel, Face>>();
-                //var shortest = graph.ShortestPathsDijkstra(e => 1.0, start);
                 var graph = graphFaces.ToBidirectionalGraph<Voxel, TaggedEdge<Voxel, Face>>();
                 var shortest = graph.ShortestPathsAStar(e => 1.0, v => VoxelDistance(v, start), start);
-                //var shortest = graph.ShortestPathsAStar(e => 1.0, v => 1.0, start);
 
                 foreach (var v in partsTargets)
                 {
                     var end = v;
                     //Check if the shortest path is valid
-                    if(shortest(end, out var endPath))
+                    if (shortest(end, out var endPath))
                     {
                         var endPathVoxels = new HashSet<Voxel>(endPath.SelectMany(e => new[] { e.Source, e.Target }));
                         var pathLength = endPathVoxels.Count;
                         //Check if path length is under minimum
                         if (pathLength <= pathMaximumLength
                             && !endPathVoxels.All(ev => ev.IsOccupied)
-                            && endPathVoxels.Count(ev => ev.GetFaceNeighbours().Any(evn => evn.IsOccupied)) > 2
-                            && true)
+                            && endPathVoxels.Count(ev => ev.GetFaceNeighbours().Any(evn => evn.IsOccupied)) > 2)
                         {
                             //Check if the connection between the parts is unique
                             var isUnique = !connectedParts.Any(cp => cp.Contains(part) && cp.Contains(end.Part));
@@ -240,7 +205,7 @@ public class AI_PlanAnalyzer : MonoBehaviour
                                     //Replace existing conection pair
                                     connectedParts[index] = new Part[] { part, end.Part };
                                     connectionLenghts[index] = pathLength;
-                                    connectionPaths[index] = endPathVoxels;  
+                                    connectionPaths[index] = endPathVoxels;
                                 }
                             }
                             else
@@ -262,7 +227,8 @@ public class AI_PlanAnalyzer : MonoBehaviour
         {
             foreach (var voxel in path)
             {
-                if(!voxel.IsOccupied && !_partsBoundaries.Contains(voxel)) _partsBoundaries.Add(voxel);
+                if (!voxel.IsOccupied
+                    && !_partsBoundaries.Contains(voxel)) _partsBoundaries.Add(voxel);
             }
         }
         mainStopwatch.Stop();
@@ -415,8 +381,7 @@ public class AI_PlanAnalyzer : MonoBehaviour
     {
         for (int i = 0; i < amt; i++)
         {
-            Part p = new Part();
-            p.NewRandomConfigurable(_grid, _existingParts);
+            ConfigurablePart p = new ConfigurablePart(_grid, _existingParts);
             _existingParts.Add(p);
         }
     }
@@ -460,6 +425,17 @@ public class AI_PlanAnalyzer : MonoBehaviour
         foreach (var voxel in _partsBoundaries)
         {
             Drawing.DrawCubeTransparent(voxel.Center + new Vector3(0f, _voxelSize, 0f), _voxelSize);
+        }
+    }
+
+    void DrawOrigins()
+    {
+        foreach (var origins in _origins)
+        {
+            foreach (var voxel in origins)
+            {
+                Drawing.DrawCube(voxel.Center + new Vector3(0, 7 * _voxelSize, 0), _grid.VoxelSize, 1);
+            }
         }
     }
 

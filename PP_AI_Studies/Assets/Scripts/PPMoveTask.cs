@@ -4,7 +4,7 @@ using UnityEngine;
 
 public class PPMoveTask : PPTask
 {
-    public Part Part;
+    public Part_BAK Part;
     public Voxel OriginVoxel => Part.OriginVoxel;
     public Voxel TargetVoxel;
     new public string taskTitle => $"Move {Part.Type.ToString()} " +

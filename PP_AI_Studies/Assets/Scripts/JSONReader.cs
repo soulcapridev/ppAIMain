@@ -28,22 +28,41 @@ public static class JSONReader
         return outList;
     }
 
-    public static List<Part> ReadPartsAsList(VoxelGrid grid, string file)
+    public static List<Part_BAK> ReadPartsAsList(VoxelGrid grid, string file)
     {
-        List<Part> outList = new List<Part>();
+        List<Part_BAK> outList = new List<Part_BAK>();
         
         string jsonString = Resources.Load<TextAsset>(file).text;
 
-        PartCollection partList = JsonUtility.FromJson<PartCollection>(jsonString);
+        PartCollection_BAK partList = JsonUtility.FromJson<PartCollection_BAK>(jsonString);
         foreach (var part in partList.Parts)
         {
-            Part p = new Part();
+            Part_BAK p = new Part_BAK();
 
             p.TypeName = part.TypeName;
             p.OrientationName = part.OrientationName;
             p.ReferenceX = part.ReferenceX;
             p.ReferenceY = part.ReferenceY;
             p.ReferenceZ = part.ReferenceZ;
+            p.Height = part.Height;
+
+            outList.Add(p.NewPart(grid));
+        }
+        return outList;
+    }
+
+    public static List<StructuralPart> ReadStructureAsList(VoxelGrid grid, string file)
+    {
+        List<StructuralPart> outList = new List<StructuralPart>();
+        string jsonString = Resources.Load<TextAsset>(file).text;
+        SPartCollection partList = JsonUtility.FromJson<SPartCollection>(jsonString);
+
+        foreach (var part in partList.Parts)
+        {
+            StructuralPart p = new StructuralPart();
+            p.OCIndexes = part.OCIndexes;
+            p.OrientationName = part.OrientationName;
+            p.OccupiedIndexes = part.OccupiedIndexes;
             p.Height = part.Height;
 
             outList.Add(p.NewPart(grid));
