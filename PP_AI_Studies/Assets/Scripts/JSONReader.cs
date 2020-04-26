@@ -69,4 +69,45 @@ public static class JSONReader
         }
         return outList;
     }
+
+    public static List<ConfigurablePart> ReadConfigurablesAsList(VoxelGrid grid, string file)
+    {
+        List<ConfigurablePart> outList = new List<ConfigurablePart>();
+        string jsonString = Resources.Load<TextAsset>(file).text;
+        CPartCollection partList = JsonUtility.FromJson<CPartCollection>(jsonString);
+
+        foreach (var part in partList.Parts)
+        {
+            ConfigurablePart p = new ConfigurablePart();
+            p.OCIndexes = part.OCIndexes;
+            p.OrientationName = part.OrientationName;
+            p.OccupiedIndexes = part.OccupiedIndexes;
+            p.Height = part.Height;
+
+            outList.Add(p.NewPart(grid));
+        }
+
+        return outList;
+    }
+
+    public static List<PPSpace> ReadSpacesAsList(VoxelGrid grid, string file)
+    {
+        List<PPSpace> outList = new List<PPSpace>();
+        string jsonString = Resources.Load<TextAsset>(file).text;
+        PPSpaceCollection spaceList = JsonUtility.FromJson<PPSpaceCollection>(jsonString);
+        Debug.Log(spaceList);
+
+        foreach (var space in spaceList.Spaces)
+        {
+            PPSpace s = new PPSpace();
+            s.OCIndexes = space.OCIndexes;
+            //s.OrientationName = part.OrientationName;
+            //s.OccupiedIndexes = part.OccupiedIndexes;
+            //s.Height = part.Height;
+
+            outList.Add(s.NewSpace(grid));
+        }
+
+        return outList;
+    }
 }

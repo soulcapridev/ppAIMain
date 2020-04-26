@@ -7,6 +7,40 @@ using System.Linq;
 [System.Serializable]
 public class ConfigurablePart : Part
 {
+    public ConfigurablePart() { }
+
+    public ConfigurablePart NewPart(VoxelGrid grid)
+    {
+        ConfigurablePart p = new ConfigurablePart();
+        p.Type = PartType.Configurable;
+        p.Orientation = (PartOrientation)System.Enum.Parse(typeof(PartOrientation), OrientationName, false);
+        p._grid = grid;
+        p.IsStatic = false;
+        p.Height = Height;
+
+        p.OCIndexes = OCIndexes;
+        var indexes = p.OCIndexes.Split(';');
+        p.nVoxels = indexes.Length;
+        p.OccupiedIndexes = new Vector3Int[p.nVoxels];
+        p.OccupiedVoxels = new Voxel[p.nVoxels];
+
+        for (int i = 0; i < p.nVoxels; i++)
+        {
+            var index = indexes[i];
+            var coords = index.Split('_');
+            Vector3Int vector = new Vector3Int(int.Parse(coords[0]), int.Parse(coords[1]), int.Parse(coords[2]));
+            var voxel = grid.Voxels[vector.x, vector.y, vector.z];
+            voxel.IsOccupied = true;
+            voxel.Part = p;
+            p.OccupiedIndexes[i] = vector;
+            p.OccupiedVoxels[i] = voxel;
+
+        }
+        p.ReferenceIndex = p.OccupiedIndexes[0];
+        p.CalculateCenter();
+        return p;
+    }
+
 
     public ConfigurablePart (VoxelGrid grid, List<Part> existingParts)
     {
@@ -19,6 +53,7 @@ public class ConfigurablePart : Part
         nVoxels = Size.x * Size.y;
         OccupiedIndexes = new Vector3Int[nVoxels];
         IsStatic = false;
+        Height = 6;
 
         Random.InitState(5);
         bool validPart = false;
@@ -87,6 +122,8 @@ public class ConfigurablePart : Part
         }
         return true;
     }
+
+    
 
     void GetOccupiedIndexes()
     {

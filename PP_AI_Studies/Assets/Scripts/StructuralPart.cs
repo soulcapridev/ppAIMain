@@ -12,6 +12,7 @@ public class StructuralPart : Part
         p.Orientation = (PartOrientation)System.Enum.Parse(typeof(PartOrientation), OrientationName, false);
         p._grid = grid;
         p.IsStatic = true;
+        p.Height = 6;
 
         p.OCIndexes = OCIndexes;
         var indexes = p.OCIndexes.Split(';');
@@ -29,12 +30,11 @@ public class StructuralPart : Part
             voxel.Part = p;
             p.OccupiedIndexes[i] = vector;
             p.OccupiedVoxels[i] = voxel;
-        }
 
+        }
+        p.ReferenceIndex = p.OccupiedIndexes[0];
+        p.CalculateCenter();
         return p;
     }
 }
-public class SPartCollection
-{
-    public StructuralPart[] Parts;
-}
+

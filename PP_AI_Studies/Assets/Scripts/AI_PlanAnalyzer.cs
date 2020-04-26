@@ -12,82 +12,125 @@ public class AI_PlanAnalyzer : MonoBehaviour
     [SerializeField] Transform _cameraPivot;
     Camera _cam;
     VoxelGrid _grid;
-    Vector3Int _gridSize = new Vector3Int(40, 1, 82);
+    bool _bigGrid;
+    string _slabFile;
+    string _structureFile;
+    Vector3Int _gridSize;
+
+    bool _testFloor = true;
     
     float _voxelSize = 0.5f;
-    int _spaceMinimumArea = 15; //in voxel ammount
-    int _ammountOfComponents = 26;
+    int _spaceMinimumArea = 20; //in voxel ammount
+    int _ammountOfComponents = 10;
     int _day = 0;
 
     List<Part> _existingParts = new List<Part>();
     List<PPSpace> _spaces = new List<PPSpace>();
     List<Voxel> _partsBoundaries = new List<Voxel>();
     List<Voxel> _toDraw = new List<Voxel>();
-    List<Voxel[]> _origins = new List<Voxel[]>();
     List<Color> _toColor = new List<Color>();
 
     bool _drawTags = false;
     bool _populated = false;
     bool _analyzed = false;
 
-    string _outputMessage = "Adjust the slider to define how many parts should be created." +
-        '\n' + "\nPress Populate button to create configurable parts on the floor";
+    string _outputMessage;
+
+    //Debugging
+    bool _showDebug = true;
+    string _debugMessage;
+    string[] _compiledMessage = new string[2];
+
+    List<Voxel[]> _origins = new List<Voxel[]>();
+    List<PartType> _foundParts = new List<PartType>();
+    List<Part[]> _foundPairs = new List<Part[]>();
+    List<Voxel[]> _prospectivePairs = new List<Voxel[]>();
+    List<Voxel> _usedWalkables = new List<Voxel>();
+    List<Voxel> _usedTargets = new List<Voxel>();
+    List<Voxel> _boudaryVoxels = new List<Voxel>();
+
+    bool _showTime;
+    bool _showRawBoundaries = true;
+    bool _showSpaces = true;
+
+    int _boundaryMainTime;
+    int _boundaryGraphTime;
+    int _boundaryPartsTime;
+    int _singleSpaceTime;
+    int _allSpacesTime;
 
     void Start()
     {
         _cam = Camera.main;
-        _cameraPivot.position = new Vector3(_gridSize.x / 2, _gridSize.y / 2, _gridSize.z / 2) * _voxelSize;
-        _grid = new VoxelGrid(_gridSize, _voxelSize, Vector3.zero);
-        //Read CSV to create the floor
-        CSVReader.SetGridState(_grid, "Input Data/FloorLayout");
-        //Read JSON to create structural parts
-        //_existingParts = JSONReader.ReadPartsAsList(_grid, "Input Data/StructureParts");
-        var newParts = JSONReader.ReadStructureAsList(_grid, "Input Data/StructureParts_R01");
-        foreach (var item in newParts)
+
+        if (!_testFloor)
         {
-            _existingParts.Add(item);
+            if (_bigGrid)
+            {
+                _gridSize = new Vector3Int(40, 1, 82);
+                _grid = new VoxelGrid(_gridSize, _voxelSize, Vector3.zero);
+                _slabFile = "Input Data/BigSlab";
+                _structureFile = "StructureParts_BigSlab";
+            }
+            else
+            {
+                _gridSize = new Vector3Int(20, 1, 45);
+                _grid = new VoxelGrid(_gridSize, _voxelSize, Vector3.zero);
+                _slabFile = "Input Data/SmallSlab";
+                _structureFile = "Input Data/StructureParts_SmallSlab";
+            }
         }
+        else
+        {
+            _gridSize = new Vector3Int(20, 1, 45);
+            _grid = new VoxelGrid(_gridSize, _voxelSize, Vector3.zero);
+            _slabFile = "Input Data/TestingData/SlabStates";
+            _structureFile = "Input Data/TestingData/Structure";
+            string configurablesFile = "Input Data/TestingData/Configurables";
+            string spacesFile = "Input Data/TestingData/Spaces";
+            ReadConfigurables(configurablesFile);
+            ReadSpaces(spacesFile);
+        }
+        
+        
+        _cameraPivot.position = new Vector3(_gridSize.x / 2, _gridSize.y / 2, _gridSize.z / 2) * _voxelSize;
+        
+        //Read CSV to create the floor
+        CSVReader.SetGridState(_grid, _slabFile);
+        
+        //Read JSON to create structural parts
+        ReadStructure(_structureFile);
     }
 
     void Update()
     {
         DrawState();
-        DrawPartsBoundaries();
+
         DrawOrigins();
+        //DrawVoxelList(_usedWalkables);
+        //DrawVoxelList(_usedTargets);
+        //DrawVoxelList(_boudaryVoxels);
+        //DrawConnections();
+        //DrawProspective();
+
+        if (_showRawBoundaries)
+        {
+            DrawPartsBoundaries();
+        }
+
+        if (_showSpaces)
+        {
+            DrawSpaces();
+        }
+
         //Use T to toggle the visibility of the components type tags
         if (Input.GetKeyDown(KeyCode.T)) _drawTags = !_drawTags;
+
+        //Use D to toggle the visibility of the Debug Window
+        if (Input.GetKeyDown(KeyCode.D)) _showDebug = !_showDebug;
+
         Drawing.DrawVoxelColor(_toDraw, _toColor, _voxelSize);
         //StartCoroutine(SaveScreenshot());
-
-    }
-
-    IEnumerator SaveScreenshot()
-    {
-        string file = $"SavedFrames/SpaceAnalysis/Frame_{_day}.png";
-        ScreenCapture.CaptureScreenshot(file, 2);
-        _day++;
-        yield return new WaitForEndOfFrame();
-    }
-
-    void Voxels2SmallestNeighbour(IEnumerable<Voxel> voxels2Allocate)
-    {
-        //This method tries to allocate the voxels in a list 
-        //to the smallest neighbouring space
-        var boundaryNonAllocated = voxels2Allocate;
-        foreach (var voxel in boundaryNonAllocated)
-        {
-            var neighbours = voxel.GetFaceNeighbours();
-            if (neighbours.Any(v => v.InSpace))
-            {
-                var closestSpace = neighbours.Where(v => v.InSpace).MinBy(s => s.ParentSpace.Voxels.Count).ParentSpace;
-                if (closestSpace != null)
-                {
-                    closestSpace.Voxels.Add(voxel);
-                    voxel.ParentSpace = closestSpace;
-                    voxel.InSpace = true;
-                }
-            }
-        }
     }
 
     void DefinePartsBoundaries()
@@ -97,15 +140,13 @@ public class AI_PlanAnalyzer : MonoBehaviour
 
         int partsProcessing = 0;
         int graphProcessing = 0;
-        //List of walkable voxels
-
 
         //Algorithm constraints
-        int breadthLevels = 15;
-        int pathMaximumLength = 15;
+        int searchRadius = 15;
+        int maximumPathLength = 15;
 
         //Paralell lists containing the connected parts and the paths lenghts
-        //This is later used to make that only the shortest connection between 2 parts is maintained
+        //This is later used to make sure that only the shortest connection between 2 parts is maintained
         List<Part[]> connectedParts = new List<Part[]>();
         List<HashSet<Voxel>> connectionPaths = new List<HashSet<Voxel>>();
         List<int> connectionLenghts = new List<int>();
@@ -121,22 +162,27 @@ public class AI_PlanAnalyzer : MonoBehaviour
             var origins = new Voxel[] { t1, t2 };
             _origins.Add(origins);
 
-            //BFS (inspired) algorithm, exploring the grid through levels
+            //Finding the neighbouring parts in a given radius from a voxel
             foreach (var origin in origins)
             {
                 //List to store the parts that have been found
                 List<Part> foundParts = new List<Part>();
+                List<Voxel> foundBoudaryVoxels = new List<Voxel>();
 
-                //Navigate through the neighbours through levels SECOND ATTEMPT (2ms)
-                var neighbours = origin.GetNeighboursInRange(breadthLevels);
+                //Navigate through the neighbours in a given range
+                var neighbours = origin.GetNeighboursInRange(searchRadius);
                 foreach (var neighbour in neighbours)
                 {
                     if (neighbour.IsOccupied && neighbour.Part != part && !foundParts.Contains(neighbour.Part))
                     {
                         foundParts.Add(neighbour.Part);
+                        _foundParts.Add(neighbour.Part.Type);
                     }
+                    else if (neighbour.IsBoundary) foundBoudaryVoxels.Add(neighbour);
                 }
-                var searchRange = neighbours.Where(n => !n.IsOccupied).ToList();
+                
+                //var searchRange = neighbours.Where(n => !n.IsOccupied).ToList();
+                var searchRange = _grid.ActiveVoxelsAsList().Where(n => !n.IsOccupied).ToList();
                 searchRange.Add(origin);
 
                 //Make copy of walkable voxels for this origin voxel
@@ -144,7 +190,7 @@ public class AI_PlanAnalyzer : MonoBehaviour
 
                 //Find the closest voxel in the neighbouring parts
                 //Add it to the localWalkable list
-                List<Voxel> partsTargets = new List<Voxel>();
+                List<Voxel> targets = new List<Voxel>();
                 foreach (var nPart in foundParts)
                 {
                     var nIndices = nPart.OccupiedIndexes;
@@ -160,13 +206,40 @@ public class AI_PlanAnalyzer : MonoBehaviour
                         }
                     }
                     var closestVoxel = _grid.Voxels[closestIndex.x, closestIndex.y, closestIndex.z];
-                    partsTargets.Add(closestVoxel);
                     localWalkable.Add(closestVoxel);
+                    targets.Add(closestVoxel);
+                }
+
+                //Find the closest boundary voxel -> this is broken!
+                //var b_closestIndex = new Vector3Int();
+                //float b_minDistance = Mathf.Infinity;
+                //foreach (var voxel in foundBoudaryVoxels)
+                //{
+                //    var distance = Vector3Int.Distance(origin.Index, voxel.Index);
+                //    if (distance < b_minDistance)
+                //    {
+                //        b_closestIndex = voxel.Index;
+                //        b_minDistance = distance;
+                //    }
+                //}
+                //var b_closestVoxel = _grid.Voxels[b_closestIndex.x, b_closestIndex.y, b_closestIndex.z];
+                //localWalkable.Add(b_closestVoxel);
+                //targets.Add(b_closestVoxel);
+
+                foreach (var voxel in foundBoudaryVoxels)
+                {
+                    //this will add all found boudary voxels to the targets
+                    //More processing but closer to defining actual boudaries 
+                    targets.Add(voxel);
                 }
 
                 partStopwatch.Stop();
                 partsProcessing += (int)partStopwatch.ElapsedMilliseconds;
 
+                foreach (var item in targets)
+                {
+                    _usedTargets.Add(item);
+                }
 
                 //Construct graph with walkable voxels and targets to be processed
                 Stopwatch graphStopwatch = new Stopwatch();
@@ -175,49 +248,80 @@ public class AI_PlanAnalyzer : MonoBehaviour
                 var graphFaces = faces.Select(f => new TaggedEdge<Voxel, Face>(f.Voxels[0], f.Voxels[1], f));
                 var start = origin;
 
-                var graph = graphFaces.ToBidirectionalGraph<Voxel, TaggedEdge<Voxel, Face>>();
-                var shortest = graph.ShortestPathsAStar(e => 1.0, v => VoxelDistance(v, start), start);
+                //var graph = graphFaces.ToBidirectionalGraph<Voxel, TaggedEdge<Voxel, Face>>();
+                //var shortest = graph.ShortestPathsAStar(e => 1.0, v => VoxelDistance(v, start), start);
+                var graph = graphFaces.ToUndirectedGraph<Voxel, TaggedEdge<Voxel, Face>>();
+                var shortest = graph.ShortestPathsDijkstra(e => 1.0, start);
 
-                foreach (var v in partsTargets)
+                HashSet<Voxel> closest2boudary = new HashSet<Voxel>();
+                int shortestLength = 1_000_000;
+                foreach (var v in targets)
                 {
                     var end = v;
-                    //Check if the shortest path is valid
-                    if (shortest(end, out var endPath))
+                    if (!end.IsBoundary)
                     {
-                        var endPathVoxels = new HashSet<Voxel>(endPath.SelectMany(e => new[] { e.Source, e.Target }));
-                        var pathLength = endPathVoxels.Count;
-                        //Check if path length is under minimum
-                        if (pathLength <= pathMaximumLength
-                            && !endPathVoxels.All(ev => ev.IsOccupied)
-                            && endPathVoxels.Count(ev => ev.GetFaceNeighbours().Any(evn => evn.IsOccupied)) > 2)
+                        //Check if the shortest path is valid
+                        if (shortest(end, out var endPath))
                         {
-                            //Check if the connection between the parts is unique
-                            var isUnique = !connectedParts.Any(cp => cp.Contains(part) && cp.Contains(end.Part));
-                            if (!isUnique)
+                            Voxel[] pair = new Voxel[] { origin, end };
+                            _prospectivePairs.Add(pair);
+
+                            var endPathVoxels = new HashSet<Voxel>(endPath.SelectMany(e => new[] { e.Source, e.Target }));
+                            var pathLength = endPathVoxels.Count;
+                            //Check if path length is under minimum
+                            if (pathLength <= maximumPathLength
+                                && !endPathVoxels.All(ev => ev.IsOccupied)
+                                && endPathVoxels.Count(ev => ev.GetFaceNeighbours().Any(evn => evn.IsOccupied)) > 2)
                             {
-                                //If it isn't unique, only replace if the current length is smaller
-                                var existingConnection = connectedParts.First(cp => cp.Contains(part) && cp.Contains(end.Part));
-                                var index = connectedParts.IndexOf(existingConnection);
-                                var existingLength = connectionLenghts[index];
-                                if (pathLength > existingLength) continue;
+                                //Check if the connection between the parts is unique
+                                var isUnique = !connectedParts.Any(cp => cp.Contains(part) && cp.Contains(end.Part));
+                                if (!isUnique)
+                                {
+                                    //If it isn't unique, only replace if the current length is smaller
+                                    var existingConnection = connectedParts.First(cp => cp.Contains(part) && cp.Contains(end.Part));
+                                    var index = connectedParts.IndexOf(existingConnection);
+                                    var existingLength = connectionLenghts[index];
+                                    if (pathLength > existingLength) continue;
+                                    else
+                                    {
+                                        //Replace existing conection pair
+                                        connectedParts[index] = new Part[] { part, end.Part };
+                                        connectionLenghts[index] = pathLength;
+                                        connectionPaths[index] = endPathVoxels;
+                                    }
+                                }
                                 else
                                 {
-                                    //Replace existing conection pair
-                                    connectedParts[index] = new Part[] { part, end.Part };
-                                    connectionLenghts[index] = pathLength;
-                                    connectionPaths[index] = endPathVoxels;
+                                    //Create new connection
+                                    connectedParts.Add(new Part[] { part, end.Part });
+                                    connectionLenghts.Add(pathLength);
+                                    connectionPaths.Add(endPathVoxels);
                                 }
-                            }
-                            else
-                            {
-                                //Create new connection
-                                connectedParts.Add(new Part[] { part, end.Part });
-                                connectionLenghts.Add(pathLength);
-                                connectionPaths.Add(endPathVoxels);
                             }
                         }
                     }
+                    else
+                    {
+                        
+                        if (shortest(end, out var endPath))
+                        {
+                            var endPathVoxels = new HashSet<Voxel>(endPath.SelectMany(e => new[] { e.Source, e.Target }));
+                            var pathLength = endPathVoxels.Count;
+                            if (pathLength <= maximumPathLength
+                                && endPathVoxels.Count(ev => ev.GetFaceNeighbours().Any(evn => evn.IsOccupied)) > 2)
+                            {
+                                if (pathLength < shortestLength)
+                                {
+                                    closest2boudary = endPathVoxels;
+                                    shortestLength = pathLength;
+                                }
+                                //connectionPaths.Add(endPathVoxels);
+                            }
+                        }
+                    }
+                    
                 }
+                if (closest2boudary.Count > 0) connectionPaths.Add(closest2boudary);
                 graphStopwatch.Stop();
                 graphProcessing += (int)graphStopwatch.ElapsedMilliseconds;
             }
@@ -232,9 +336,19 @@ public class AI_PlanAnalyzer : MonoBehaviour
             }
         }
         mainStopwatch.Stop();
-        print($"Took {mainStopwatch.ElapsedMilliseconds}ms to Process");
-        print($"Took {partsProcessing}ms to Process Parts");
-        print($"Took {graphProcessing}ms to Process Graphs");
+        int mainProcessing = (int) mainStopwatch.ElapsedMilliseconds;
+        //print($"Took {mainStopwatch.ElapsedMilliseconds}ms to Process");
+        //print($"Took {partsProcessing}ms to Process Parts");
+        //print($"Took {graphProcessing}ms to Process Graphs");
+
+        _boundaryPartsTime = partsProcessing;
+        _boundaryGraphTime = graphProcessing;
+        _boundaryMainTime = mainProcessing;
+        
+        foreach (var t in connectedParts)
+        {
+            _foundPairs.Add(t);
+        }
     }
 
     void GenerateSingleSpace()
@@ -243,7 +357,9 @@ public class AI_PlanAnalyzer : MonoBehaviour
         //The method is inspired by a BFS algorithm, continuously checking the neighbours of the
         //processed voxels until the minimum area is reached
 
-        int minimumArea = 1000; //in voxel ammount
+        Stopwatch singleSpace = new Stopwatch();
+        singleSpace.Start();
+        int maximumArea = 1000; //in voxel ammount
         var availableVoxels = _grid.ActiveVoxelsAsList().Where(v => !_partsBoundaries.Contains(v) && !v.IsOccupied && !v.InSpace).ToList();
         if (availableVoxels.Count == 0) return;
         Voxel originVoxel = availableVoxels[0];
@@ -254,7 +370,7 @@ public class AI_PlanAnalyzer : MonoBehaviour
         originVoxel.ParentSpace = space;
         space.Voxels.Add(originVoxel);
         //Keep running until the space area is under the minimum
-        while (space.Voxels.Count < minimumArea)
+        while (space.Voxels.Count < maximumArea)
         {
             List<Voxel> temp = new List<Voxel>();
             foreach (var voxel in space.Voxels)
@@ -279,7 +395,7 @@ public class AI_PlanAnalyzer : MonoBehaviour
             //Add found neighbours to the space until it reaches maximum capacity
             foreach (var v in temp)
             {
-                if (space.Voxels.Count <= minimumArea)
+                if (space.Voxels.Count <= maximumArea)
                 {
                     v.InSpace = true;
                     v.ParentSpace = space;
@@ -288,6 +404,8 @@ public class AI_PlanAnalyzer : MonoBehaviour
             }
         }
         _spaces.Add(space);
+        singleSpace.Stop();
+        _singleSpaceTime = (int)singleSpace.ElapsedMilliseconds;
     }
 
     void GenerateSpaces()
@@ -300,11 +418,13 @@ public class AI_PlanAnalyzer : MonoBehaviour
             GenerateSingleSpace();
         }
         
+        
         //Allocate boundary voxel to the smallest neighbouring space
         while (_partsBoundaries.Any(b => !b.InSpace))
         {
             Voxels2SmallestNeighbour(_partsBoundaries.Where(b => !b.InSpace));
         }
+        
 
         //Destroy the spaces that are too small 
         Queue<Voxel>  orphanVoxels = new Queue<Voxel>();
@@ -321,6 +441,11 @@ public class AI_PlanAnalyzer : MonoBehaviour
         }
         //Remove empty spaces from main list of spaces
         _spaces = _spaces.Where(s => s.Voxels.Count != 0).ToList();
+
+        stopwatch.Stop();
+        _allSpacesTime = (int)stopwatch.ElapsedMilliseconds;
+        return;
+
 
         while (orphanVoxels.Count > 0)
         {
@@ -347,8 +472,83 @@ public class AI_PlanAnalyzer : MonoBehaviour
                 orphanVoxels.Enqueue(orphan);
             }
         }
-        stopwatch.Stop();
-        print($"Took {stopwatch.ElapsedMilliseconds}ms to Generate {_spaces.Count} Spaces");
+        
+        //print($"Took {stopwatch.ElapsedMilliseconds}ms to Generate {_spaces.Count} Spaces");
+    }
+
+    void Voxels2SmallestNeighbour(IEnumerable<Voxel> voxels2Allocate)
+    {
+        //This method tries to allocate the voxels in a list 
+        //to the smallest neighbouring space
+        var boundaryNonAllocated = voxels2Allocate;
+        foreach (var voxel in boundaryNonAllocated)
+        {
+            var neighbours = voxel.GetFaceNeighbours();
+            if (neighbours.Any(v => v.InSpace))
+            {
+                var closestSpace = neighbours.Where(v => v.InSpace).MinBy(s => s.ParentSpace.Voxels.Count).ParentSpace;
+                if (closestSpace != null)
+                {
+                    closestSpace.Voxels.Add(voxel);
+                    voxel.ParentSpace = closestSpace;
+                    voxel.InSpace = true;
+                }
+            }
+        }
+    }
+
+    void ReadStructure(string file)
+    {
+        var newParts = JSONReader.ReadStructureAsList(_grid, file);
+        foreach (var item in newParts)
+        {
+            _existingParts.Add(item);
+        }
+    }
+
+    void ReadConfigurables(string file)
+    {
+        var newParts = JSONReader.ReadConfigurablesAsList(_grid, file);
+        foreach (var item in newParts)
+        {
+            _existingParts.Add(item);
+        }
+    }
+
+    void ReadSpaces(string file)
+    {
+        var newParts = JSONReader.ReadSpacesAsList(_grid, file);
+        foreach (var item in newParts)
+        {
+            _spaces.Add(item);
+        }
+    }
+
+    void CountStructure()
+    {
+        var n = _existingParts.Count(p => p.Type == PartType.Structure);
+        var nV = _existingParts.Where(p => p.Type == PartType.Structure).Select(st => st.OccupiedIndexes.Length);
+        print($"{n} Structural Parts");
+        foreach (var st in nV)
+        {
+            print($"Part with {st} voxels");
+        }
+    }
+
+    void PopulateRandomConfigurable(int amt)
+    {
+        for (int i = 0; i < amt; i++)
+        {
+            ConfigurablePart p = new ConfigurablePart(_grid, _existingParts);
+            _existingParts.Add(p);
+        }
+    }
+
+    double VoxelDistance(Voxel s, Voxel t)
+    {
+        var dif = s.Center - t.Center;
+        double distance = dif.sqrMagnitude;
+        return distance;
     }
 
     IEnumerator AnimateGeneration()
@@ -377,13 +577,37 @@ public class AI_PlanAnalyzer : MonoBehaviour
         }
     }
 
-    void PopulateRandomConfigurable(int amt)
+    IEnumerator SaveScreenshot()
     {
-        for (int i = 0; i < amt; i++)
+        string file = $"SavedFrames/SpaceAnalysis/Frame_{_day}.png";
+        ScreenCapture.CaptureScreenshot(file, 2);
+        _day++;
+        yield return new WaitForEndOfFrame();
+    }
+
+    //Drawing
+
+    void DrawConnections()
+    {
+        foreach (var pair in _foundPairs)
         {
-            ConfigurablePart p = new ConfigurablePart(_grid, _existingParts);
-            _existingParts.Add(p);
+            Vector3 height = new Vector3(0, 8f, 0) * _voxelSize;
+            Drawing.DrawBar(pair[0].Center + height, pair[1].Center + height, 0.1f, 1);
         }
+    }
+
+    void DrawProspective()
+    {
+        foreach (var pair in _prospectivePairs)
+        {
+            Vector3 height = new Vector3(0, 8f, 0) * _voxelSize;
+            Drawing.DrawBar(pair[0].Center + height, pair[1].Center + height, 0.1f, 1);
+        }
+    }
+
+    void DrawSpaces()
+    {
+        Drawing.DrawSpaces(_spaces, _grid);
     }
 
     void DrawState()
@@ -417,6 +641,21 @@ public class AI_PlanAnalyzer : MonoBehaviour
                     }
                 }
             }
+        }
+    }
+    void DrawWalkable()
+    {
+        foreach (var voxel in _usedWalkables)
+        {
+            Drawing.DrawCube(voxel.Center, _grid.VoxelSize, 0.25f);
+        }
+    }
+
+    void DrawVoxelList(List<Voxel> input)
+    {
+        foreach (var voxel in input)
+        {
+            Drawing.DrawCube(voxel.Center + new Vector3(0,0.5f,0), _grid.VoxelSize, 0.25f);
         }
     }
 
@@ -458,12 +697,7 @@ public class AI_PlanAnalyzer : MonoBehaviour
         }
     }
 
-    double VoxelDistance(Voxel s, Voxel t)
-    {
-        var dif = s.Center - t.Center;
-        double distance = dif.sqrMagnitude;
-        return distance;
-    }
+    
 
     private void OnGUI()
     {
@@ -490,38 +724,116 @@ public class AI_PlanAnalyzer : MonoBehaviour
         //Title
         GUI.Box(new Rect(180, 30, 500, 25), "AI Plan Analyser", "title");
 
-        //Part counter slider
-        _ammountOfComponents = Mathf.RoundToInt(GUI.HorizontalSlider(new Rect(leftPad, topPad, fieldTitleWidth, fieldHeight), _ammountOfComponents, 20f, 28f));
-        GUI.Box(new Rect((leftPad * 2) + fieldTitleWidth, topPad, textFieldWidth, fieldHeight), $"Ammount of Parts: {_ammountOfComponents}", "fieldTitle");
-
-        //Populate Button
-        if (GUI.Button(new Rect(leftPad, topPad + ((fieldHeight + 10) * i++), (fieldTitleWidth + leftPad + textFieldWidth), fieldHeight), "Populate Parts"))
+        if (!_testFloor)
         {
-            _populated = true;
-            _grid.ClearGrid();
-            _existingParts = new List<Part>();
-            PopulateRandomConfigurable(_ammountOfComponents);
-            _outputMessage = $"{_ammountOfComponents} parts created! " +
-                $"\n \nClick populate again to generate a different layout or Make Spaces to proceed" +
-                $"\n \nYou can press T to visualize type of each part";
-
-        }
-        //Make Button
-        if (_populated && !_analyzed)
-        {
-            if (GUI.Button(new Rect(leftPad, topPad + ((fieldHeight + 10) * i++), (fieldTitleWidth + leftPad + textFieldWidth), fieldHeight), "Make Spaces"))
+            //Output message to be displayed out of test mode
+            _outputMessage = "Adjust the slider to define how many parts should be created." + 
+                '\n' + "\nPress Populate button to create configurable parts on the floor";
+            //Part counter slider
+            _ammountOfComponents = Mathf.RoundToInt(GUI.HorizontalSlider(new Rect(leftPad, topPad, fieldTitleWidth, fieldHeight), _ammountOfComponents, 5f, 15f));
+            GUI.Box(new Rect((leftPad * 2) + fieldTitleWidth, topPad, textFieldWidth, fieldHeight), $"Ammount of Parts: {_ammountOfComponents}", "fieldTitle");
+            
+            //Populate Button
+            if (GUI.Button(new Rect(leftPad, topPad + ((fieldHeight + 10) * i++), (fieldTitleWidth + leftPad + textFieldWidth), fieldHeight), "Populate Parts"))
             {
-                _outputMessage = $"Please wait...";
-                DefinePartsBoundaries();
-                //GenerateSpaces();
-                //StartCoroutine(AnimateGeneration());
-                _analyzed = true;
-                _outputMessage = $"{_spaces.Count} Spaces created!";
+                _populated = true;
+                _grid.ClearGrid();
+                _existingParts = new List<Part>();
+                if (_bigGrid) ReadStructure("StructureParts_BigSlab");
+
+                PopulateRandomConfigurable(_ammountOfComponents);
+
+                _boudaryVoxels = _grid.ActiveVoxelsAsList().Where(v => v.IsBoundary).ToList();
+                _outputMessage = $"{_ammountOfComponents} parts created! " +
+                    $"\n \nClick populate again to generate a different layout or Make Spaces to proceed" +
+                    $"\n \nYou can press T to visualize type of each part";
+            }
+            //Make Button
+            if (_populated && !_analyzed)
+            {
+                if (GUI.Button(new Rect(leftPad, topPad + ((fieldHeight + 10) * i++), (fieldTitleWidth + leftPad + textFieldWidth), fieldHeight), "Make Spaces"))
+                {
+                    _outputMessage = $"Please wait...";
+                    DefinePartsBoundaries();
+                    //GenerateSingleSpace();
+                    GenerateSpaces();
+                    //StartCoroutine(AnimateGeneration());
+                    _analyzed = true;
+                    _outputMessage = $"{_spaces.Count} Spaces created!";
+                }
             }
         }
+        else
+        {
+            _outputMessage = "Test mode is active.";
+        }
+        
+       
         //Output Message
         GUI.Box(new Rect(leftPad, (topPad) + ((fieldHeight + 10) * i++), (fieldTitleWidth + leftPad + textFieldWidth), fieldHeight), _outputMessage, "outputMessage");
 
+        //Debug pop-up window
+        if (_showDebug)
+        {
+            GUI.Window(0, new Rect(Screen.width - leftPad - 300, topPad - 75, 300, (fieldHeight * 25) + 10), DebugWindow, "Debug_Summary");
+        }
+    }
 
+    void DebugWindow(int windowID)
+    {
+        GUIStyle style = _skin.GetStyle("debugWindow");
+        int leftPad = 10;
+        int topPad = 10;
+        int fieldWidth = 300 - (leftPad*2);
+        int fieldHeight = 25;
+        //int buttonWidth = 50;
+        int windowSize = (fieldHeight * 25) + 10;
+
+        int count = 1;
+
+        _compiledMessage[0] = "Debug output";
+
+        //Time Button
+        if (GUI.Button(new Rect(leftPad, windowSize - ((fieldHeight + topPad) * count++), fieldWidth, fieldHeight), "Processing Durations"))
+        {
+            _showTime = !_showTime;
+            if (_showTime)
+            {
+                _compiledMessage[1] = "Time: \n" + $"Parts: {_boundaryPartsTime}ms \n"
+                    + $"Graphs: {_boundaryGraphTime}ms \n"
+                    + $"Boudaries Total: {_boundaryMainTime}ms \n"
+                    + $"Single Space: {_singleSpaceTime}ms \n"
+                    + $"All Spaces: {_allSpacesTime}ms";
+            }
+            else
+            {
+                _compiledMessage[1] = "escape";
+            }  
+        }
+
+        //Show Raw Boundaries
+        if (GUI.Button(new Rect(leftPad, windowSize - ((fieldHeight + topPad) * count++), fieldWidth, fieldHeight), "Raw Boundaries"))
+        {
+            _showRawBoundaries = !_showRawBoundaries;
+        }
+        
+        //Show Spaces
+        if (GUI.Button(new Rect(leftPad, windowSize - ((fieldHeight + topPad) * count++), fieldWidth, fieldHeight), "Spaces"))
+        {
+            _showSpaces = !_showSpaces;
+        }
+
+        //Debug Message
+        _debugMessage = "";
+        for (int i = 0; i < _compiledMessage.Length; i++)
+        {
+            var line = _compiledMessage[i];
+            if (line != "escape")
+            {
+                _debugMessage += line + '\n';
+            }
+        }
+
+        GUI.Box(new Rect(leftPad, topPad, fieldWidth, fieldHeight), _debugMessage, "outputMessage");
     }
 }

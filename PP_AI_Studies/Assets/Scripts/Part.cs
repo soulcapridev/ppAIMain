@@ -8,6 +8,7 @@ public class Part : System.IEquatable<Part>
 {
     protected VoxelGrid _grid;
 
+    public string Name;
     public PartType Type;
     public Vector2Int Size;
     public bool IsStatic;
@@ -48,15 +49,25 @@ public class Part : System.IEquatable<Part>
 
     public bool Equals(Part other)
     {
-        return (other != null) && (Type == other.Type) && (ReferenceIndex == other.ReferenceIndex);
+        return (other != null) && (Type == other.Type) && (Center == other.Center);
     }
 
     public override int GetHashCode()
     {
-        return Type.GetHashCode() + ReferenceIndex.GetHashCode() + Orientation.GetHashCode();
+        return Type.GetHashCode() + Center.GetHashCode() + Orientation.GetHashCode();
     }
 }
 public class PartCollection
 {
     public Part[] Parts;
+}
+
+public class CPartCollection
+{
+    public ConfigurablePart[] Parts;
+}
+
+public class SPartCollection
+{
+    public StructuralPart[] Parts;
 }

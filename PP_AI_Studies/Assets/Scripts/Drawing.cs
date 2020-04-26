@@ -119,25 +119,16 @@ class Drawing : MonoBehaviour
 
     public static void DrawConfigurable(Vector3 center, float size, float t = 0)
     {
-        //var color = _gradient.Evaluate(t);
-        //var color = new Color(0.9f, 0.9f, 0.9f);
-        //_properties.SetColor("_Color", color);
-        //_properties.SetTexture("_Texture", _wood);
-        
-
         var matrix = Matrix4x4.TRS(
                 center,
                 Quaternion.identity,
                 Vector3.one * (size * 0.99f)
                 );
-
-        //Graphics.DrawMesh(_unitBox, matrix, _instance._opaque, 0, null, 0, _properties);
         Graphics.DrawMesh(_unitBox, matrix, _woodM, 0);
     }
 
     public static void DrawCubeTransparent(Vector3 center, float size)
     {
-        //var color = _gradient.Evaluate(t);
         var color = new Color(0.9f, 0.25f, 0.25f, 0.70f);
         _properties.SetColor("_Color", color);
 
@@ -170,7 +161,6 @@ class Drawing : MonoBehaviour
         }
         
     }
-
 
     public static void DrawSpaces(List<PPSpace> spaces, VoxelGrid grid)
     {

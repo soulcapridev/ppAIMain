@@ -1,6 +1,7 @@
 ﻿using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using System.Linq;
 
 public class VoxelGrid
 {
@@ -74,6 +75,27 @@ public class VoxelGrid
         }
 
         return outList;
+    }
+
+    public IEnumerable<Voxel> GetBoundaryVoxels()
+    {
+        //This method returns the voxels that are part of the boundary
+        //Active, not Occupied, has at least one neighbour which is not active
+        //Using linq, performance should eventually be checked
+        for (int x = 0; x < Size.x; x++)
+        {
+            for (int y = 0; y < Size.y; y++)
+            {
+                for (int z = 0; z < Size.z; z++)
+                {
+                    Voxel voxel = Voxels[x, y, z];
+                    if (voxel.IsActive && !voxel.IsOccupied && voxel.GetFaceNeighbours().Any(n => !n.IsActive))
+                    {
+                        yield return voxel;
+                    }
+                }
+            }
+        }
     }
 
     public void ClearGrid()

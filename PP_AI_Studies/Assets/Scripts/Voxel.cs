@@ -13,8 +13,8 @@ public class Voxel : IEquatable<Voxel>
     public List<Face> Faces = new List<Face>(6);
     public Part Part;
     public bool InSpace;
-    private bool IsGridBoundary => Index.x == 0 || Index.x == _grid.Size.x-1 || Index.z == 0 || Index.z == _grid.Size.z-1;
-    public bool IsBoundary => ((GetFaceNeighbours().Any(n => !n.IsActive || n.IsOccupied)) || IsGridBoundary) && IsActive && !IsOccupied;
+    private bool IsGridBoundary => Index.x == 0 || Index.x == _grid.Size.x - 1 || Index.z == 0 || Index.z == _grid.Size.z - 1;
+    public bool IsBoundary => (GetFaceNeighbours().Any(n => !n.IsActive) || IsGridBoundary) && IsActive && !IsOccupied;
     public PPSpace ParentSpace;
 
     VoxelGrid _grid;
@@ -51,7 +51,7 @@ public class Voxel : IEquatable<Voxel>
         int x = Index.x;
         int y = Index.y;
         int z = Index.z;
-        var s = _grid.Size;
+        var s = _grid.Size - Vector3Int.one;
 
         int xUnder = x - radius;
         int xUpper = x + radius;

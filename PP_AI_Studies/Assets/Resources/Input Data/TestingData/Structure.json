@@ -1,0 +1,27 @@
+{ 
+"Parts": [{
+"OCIndexes": "19_0_42;19_0_43;19_0_44",
+"Height": 6,
+"OrientationName": "Horizontal"
+},{
+"OCIndexes": "3_0_41;3_0_42;3_0_43",
+"Height": 6,
+"OrientationName": "Horizontal"
+},{
+"OCIndexes": "10_0_31;10_0_32;10_0_33;10_0_34",
+"Height": 6,
+"OrientationName": "Horizontal"
+},{
+"OCIndexes": "16_0_0;17_0_0",
+"Height": 6,
+"OrientationName": "Vertical"
+},{
+"OCIndexes": "0_0_0;0_0_1;0_0_2;0_0_3",
+"Height": 6,
+"OrientationName": "Horizontal"
+},{
+"OCIndexes": "10_0_12;10_0_13;10_0_14;10_0_15",
+"Height": 6,
+"OrientationName": "Horizontal"
+}]
+}
