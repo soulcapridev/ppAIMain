@@ -95,7 +95,6 @@ public static class JSONReader
         List<PPSpace> outList = new List<PPSpace>();
         string jsonString = Resources.Load<TextAsset>(file).text;
         PPSpaceCollection spaceList = JsonUtility.FromJson<PPSpaceCollection>(jsonString);
-        Debug.Log(spaceList);
 
         foreach (var space in spaceList.Spaces)
         {
