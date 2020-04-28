@@ -59,12 +59,12 @@ public class AI_TaskInterceptor : MonoBehaviour
 
             foreach (var task in _inputTasks)
             {
-                if (task.taskDay == _currentWeekDay && task.taskProbability >= dayProb)
+                if (task.TaskDay == _currentWeekDay && task.TaskProbability >= dayProb)
                 {
                     if (suggestedTasks.Contains(task))
                     {
-                        task.aiAccepted = true;
-                        task.aiSuggested = true;
+                        task.AiAccepted = true;
+                        task.AiSuggested = true;
                     }
                     _mainTaskPool.Add(task);
                     _todayTaskPool.Add(task);
@@ -74,7 +74,7 @@ public class AI_TaskInterceptor : MonoBehaviour
             var dailyDenied = suggestedTasks.Where(s => !_todayTaskPool.Contains(s));
             foreach (var dTask in dailyDenied)
             {
-                dTask.aiAccepted = false;
+                dTask.AiAccepted = false;
                 _mainTaskPool.Add(dTask);
                 _todayTaskPool.Add(dTask);
                 _weekTaskPool[_currentWeekDay].Add(dTask);
@@ -83,8 +83,8 @@ public class AI_TaskInterceptor : MonoBehaviour
             TaskCounter();
             foreach (var item in _todayTaskPool)
             {
-                if (item.aiAccepted) _systemScore += 5;
-                if (item.aiSuggested && !item.aiAccepted) _systemScore -= 1;
+                if (item.AiAccepted) _systemScore += 5;
+                if (item.AiSuggested && !item.AiAccepted) _systemScore -= 1;
 
             }
             _day++;
@@ -95,7 +95,7 @@ public class AI_TaskInterceptor : MonoBehaviour
 
     void TaskCounter()
     {
-        _taskOccurrencies = _mainTaskPool.Where(t => t.aiAccepted || !t.aiSuggested)
+        _taskOccurrencies = _mainTaskPool.Where(t => t.AiAccepted || !t.AiSuggested)
             .GroupBy(t => t.GetHashCode())
             .Select(group => group.ToList()).ToList()
             .ToDictionary(group => group.First(), group => group.Count); ;
@@ -116,12 +116,12 @@ public class AI_TaskInterceptor : MonoBehaviour
             float taskFrequency = task.Value / week;
             if (_day > _dayLearningCap && taskFrequency >= 0.65f)
             {
-                if (task.Key.taskDay == _currentWeekDay)
+                if (task.Key.TaskDay == _currentWeekDay)
                 {
                     var newTask = task.Key.CopyTask();
 
 
-                    newTask.aiSuggested = true;
+                    newTask.AiSuggested = true;
                     suggestedTasks.Add(newTask);
                 }
                 
@@ -194,9 +194,9 @@ public class AI_TaskInterceptor : MonoBehaviour
                 for (int j = 0; j < todaysTasks.Count; j++)
                 {
                     var task = todaysTasks[j];
-                    if (task.aiSuggested)
+                    if (task.AiSuggested)
                     {
-                        if (task.aiAccepted)
+                        if (task.AiAccepted)
                         {
                             if (i == _currentWeekDay)
                             {
@@ -222,7 +222,7 @@ public class AI_TaskInterceptor : MonoBehaviour
                     
                     Rect taskRect = new Rect(dayRect.x, (dayRect.yMax + paddingA) + ((dayBoxHeight + paddingA) * j), dayRect.width, dayBoxHeight);
                     GUIContent taskContent = new GUIContent();
-                    taskContent.text = $"{task.tenantName} requested {task.taskTitle} @ {task.taskTime}h";
+                    taskContent.text = $"{task.TenantName} requested {task.TaskTitle} @ {task.TaskTime}h";
                     GUI.Box(taskRect, taskContent, taskBoxStyle);
                 }
             }

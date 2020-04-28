@@ -1,6 +1,7 @@
 ﻿using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using System.Linq;
 
 public static class JSONReader
 { 
@@ -8,47 +9,53 @@ public static class JSONReader
     {
         List<PPTask> outList = new List<PPTask>();
         string jsonString = Resources.Load<TextAsset>("Input Data/U_Tasks").text;
-
         TaskCollection taskList = JsonUtility.FromJson<TaskCollection>(jsonString);
         foreach (var task in taskList.Tasks)
         {
             PPTask t = new PPTask();
-
-            t.tenantName = task.tenantName;
+            t.TenantName = task.TenantName;
             t.NewTenant();
-
-            t.taskDay = task.taskDay;
-            t.taskProbability = task.taskProbability;
-            t.taskTime = task.taskTime;
-            t.taskTitle = task.taskTitle;
+            t.TaskDay = task.TaskDay;
+            t.TaskProbability = task.TaskProbability;
+            t.TaskTime = task.TaskTime;
+            t.TaskTitle = task.TaskTitle;
             outList.Add(t);
         }
-
-
         return outList;
     }
 
-    public static List<Part_BAK> ReadPartsAsList(VoxelGrid grid, string file)
+    public static List<PPSpaceRequest> ReadSpaceRequests(string file, List<Tenant> tenantList)
     {
-        List<Part_BAK> outList = new List<Part_BAK>();
-        
+        List<PPSpaceRequest> requests = new List<PPSpaceRequest>();
         string jsonString = Resources.Load<TextAsset>(file).text;
-
-        PartCollection_BAK partList = JsonUtility.FromJson<PartCollection_BAK>(jsonString);
-        foreach (var part in partList.Parts)
+        PPRequestCollection requestList = JsonUtility.FromJson<PPRequestCollection>(jsonString);
+        var existingTenantNames = tenantList.Select(t => t.Name).ToList();
+        List<Tenant> newTenants = new List<Tenant>();
+        List<string> newTenantsNames = new List<string>();
+        foreach (var request in requestList.Requests)
         {
-            Part_BAK p = new Part_BAK();
-
-            p.TypeName = part.TypeName;
-            p.OrientationName = part.OrientationName;
-            p.ReferenceX = part.ReferenceX;
-            p.ReferenceY = part.ReferenceY;
-            p.ReferenceZ = part.ReferenceZ;
-            p.Height = part.Height;
-
-            outList.Add(p.NewPart(grid));
+            if (existingTenantNames.Contains(request.TenantName))
+            {
+                request.Tenant = tenantList[existingTenantNames.IndexOf(request.TenantName)];
+            }
+            else
+            {
+                var nt = request.NewTenant();
+                newTenants.Add(nt);
+                newTenantsNames.Add(request.TenantName);
+            }
+            request.Function = (SpaceFunction)System.Enum.Parse(typeof(SpaceFunction), request.FunctionName, false);
+            var probabilities = request.Probabilities_S.Split('_');
+            request.RequestProbability = new Dictionary<int, float>();
+            for (int i = 0; i < probabilities.Length; i++)
+            {
+                float probability = int.Parse(probabilities[i]) / 100.00f;
+                request.RequestProbability.Add(i, probability);
+            }
+            requests.Add(request);
+            
         }
-        return outList;
+        return requests;
     }
 
     public static List<StructuralPart> ReadStructureAsList(VoxelGrid grid, string file)
@@ -56,7 +63,6 @@ public static class JSONReader
         List<StructuralPart> outList = new List<StructuralPart>();
         string jsonString = Resources.Load<TextAsset>(file).text;
         SPartCollection partList = JsonUtility.FromJson<SPartCollection>(jsonString);
-
         foreach (var part in partList.Parts)
         {
             StructuralPart p = new StructuralPart();
@@ -75,7 +81,6 @@ public static class JSONReader
         List<ConfigurablePart> outList = new List<ConfigurablePart>();
         string jsonString = Resources.Load<TextAsset>(file).text;
         CPartCollection partList = JsonUtility.FromJson<CPartCollection>(jsonString);
-
         foreach (var part in partList.Parts)
         {
             ConfigurablePart p = new ConfigurablePart();
@@ -95,16 +100,12 @@ public static class JSONReader
         List<PPSpace> outList = new List<PPSpace>();
         string jsonString = Resources.Load<TextAsset>(file).text;
         PPSpaceCollection spaceList = JsonUtility.FromJson<PPSpaceCollection>(jsonString);
-
+        int count = 0;
         foreach (var space in spaceList.Spaces)
         {
             PPSpace s = new PPSpace();
             s.OCIndexes = space.OCIndexes;
-            //s.OrientationName = part.OrientationName;
-            //s.OccupiedIndexes = part.OccupiedIndexes;
-            //s.Height = part.Height;
-
-            outList.Add(s.NewSpace(grid));
+            outList.Add(s.NewSpace(grid, $"Space_{count++}"));
         }
 
         return outList;

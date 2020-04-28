@@ -8,6 +8,9 @@ using QuickGraph.Algorithms;
 
 public class AI_PlanAnalyzer : MonoBehaviour
 {
+    //
+    //FIELDS AND PROPERTIES (further categorization required)
+    //
     [SerializeField] GUISkin _skin;
     [SerializeField] Transform _cameraPivot;
     Camera _cam;
@@ -17,9 +20,9 @@ public class AI_PlanAnalyzer : MonoBehaviour
     string _structureFile;
     Vector3Int _gridSize;
 
-    bool _testFloor = true;
+    bool _testMode = true;
     
-    float _voxelSize = 0.5f;
+    float _voxelSize = 0.375f;
     int _spaceMinimumArea = 20; //in voxel ammount
     int _ammountOfComponents = 10;
     int _day = 0;
@@ -29,6 +32,8 @@ public class AI_PlanAnalyzer : MonoBehaviour
     List<Voxel> _partsBoundaries = new List<Voxel>();
     List<Voxel> _toDraw = new List<Voxel>();
     List<Color> _toColor = new List<Color>();
+    List<Tenant> _tenants = new List<Tenant>();
+    List<PPSpaceRequest> _spaceRequests = new List<PPSpaceRequest>();
 
     bool _drawTags = false;
     bool _populated = false;
@@ -52,6 +57,11 @@ public class AI_PlanAnalyzer : MonoBehaviour
     bool _showTime;
     bool _showRawBoundaries = true;
     bool _showSpaces = true;
+    bool _showSpaceData = false;
+
+    string _spaceData;
+
+    PPSpace _selectedSpace;
 
     int _boundaryMainTime;
     int _boundaryGraphTime;
@@ -59,11 +69,14 @@ public class AI_PlanAnalyzer : MonoBehaviour
     int _singleSpaceTime;
     int _allSpacesTime;
 
+    //
+    //Unity Specific Methods
+    //
     void Start()
     {
         _cam = Camera.main;
 
-        if (!_testFloor)
+        if (!_testMode)
         {
             if (_bigGrid)
             {
@@ -91,9 +104,11 @@ public class AI_PlanAnalyzer : MonoBehaviour
             ReadConfigurables(configurablesFile);
             ReadSpaces(spacesFile);
         }
-        
-        
-        _cameraPivot.position = new Vector3(_gridSize.x / 2, _gridSize.y / 2, _gridSize.z / 2) * _voxelSize;
+
+        _spaceRequests = JSONReader.ReadSpaceRequests("Input Data/U_SpaceRequests", _tenants);
+        _tenants = _spaceRequests.Select(s => s.Tenant).Distinct().ToList();
+        print(_tenants.Count);
+        _cameraPivot.position = new Vector3(_gridSize.x / 2, 0, _gridSize.z / 2) * _voxelSize;
         
         //Read CSV to create the floor
         CSVReader.SetGridState(_grid, _slabFile);
@@ -123,6 +138,11 @@ public class AI_PlanAnalyzer : MonoBehaviour
             DrawSpaces();
         }
 
+        if (Input.GetMouseButtonDown(0))
+        {
+            GetSpaceFromArrow();
+        }
+
         //Use T to toggle the visibility of the components type tags
         if (Input.GetKeyDown(KeyCode.T)) _drawTags = !_drawTags;
 
@@ -133,6 +153,9 @@ public class AI_PlanAnalyzer : MonoBehaviour
         //StartCoroutine(SaveScreenshot());
     }
 
+    //
+    //METHODS AND FUNCTIONS
+    //
     void DefinePartsBoundaries()
     {
         Stopwatch mainStopwatch = new Stopwatch();
@@ -351,7 +374,7 @@ public class AI_PlanAnalyzer : MonoBehaviour
         }
     }
 
-    void GenerateSingleSpace()
+    void GenerateSingleSpace(int number)
     {
         //Generate spaces on the voxels that are not inside the parts boudaries, or space or part
         //The method is inspired by a BFS algorithm, continuously checking the neighbours of the
@@ -365,10 +388,11 @@ public class AI_PlanAnalyzer : MonoBehaviour
         Voxel originVoxel = availableVoxels[0];
         
         //Initiate a new space
-        PPSpace space = new PPSpace();
+        PPSpace space = new PPSpace(_grid);
         originVoxel.InSpace = true;
         originVoxel.ParentSpace = space;
         space.Voxels.Add(originVoxel);
+        space.Indices.Add(originVoxel.Index);
         //Keep running until the space area is under the minimum
         while (space.Voxels.Count < maximumArea)
         {
@@ -386,7 +410,6 @@ public class AI_PlanAnalyzer : MonoBehaviour
                     if (!space.Voxels.Contains(neighbour) && !temp.Contains(neighbour))
                     {
                         if (gridVoxel.IsActive && !gridVoxel.IsOccupied && !gridVoxel.InSpace) temp.Add(neighbour);
-
                     }
                 }
             }
@@ -400,9 +423,12 @@ public class AI_PlanAnalyzer : MonoBehaviour
                     v.InSpace = true;
                     v.ParentSpace = space;
                     space.Voxels.Add(v);
+                    space.Indices.Add(v.Index);
                 }
             }
         }
+        space.Name = $"Space_{number.ToString()}";
+        space.CreateArrow();
         _spaces.Add(space);
         singleSpace.Stop();
         _singleSpaceTime = (int)singleSpace.ElapsedMilliseconds;
@@ -412,10 +438,11 @@ public class AI_PlanAnalyzer : MonoBehaviour
     {
         Stopwatch stopwatch = new Stopwatch();
         stopwatch.Start();
+        int i = 0;
         //Generate spaces on vacant voxels inside boundaries
         while (_grid.ActiveVoxelsAsList().Any(v => !_partsBoundaries.Contains(v) && !v.IsOccupied && !v.InSpace))
         {
-            GenerateSingleSpace();
+            GenerateSingleSpace(i++);
         }
         
         
@@ -551,6 +578,35 @@ public class AI_PlanAnalyzer : MonoBehaviour
         return distance;
     }
 
+    PPSpace GetSpaceFromArrow()
+    {
+        //This method allows clicking on the InfoArrow
+        //and returns its respective space
+        PPSpace clicked = null;
+        Ray ClickRay = Camera.main.ScreenPointToRay(Input.mousePosition);
+        RaycastHit hit;
+        if (Physics.Raycast(ClickRay, out hit))
+        {
+            if (hit.collider.gameObject.transform != null && hit.collider.gameObject.tag == "InfoArrow")
+            {
+                clicked = hit.collider.gameObject.GetComponent<InfoArrow>().GetSpace();
+                //print($"Clicked on {clicked.Name}'s arrow");
+                _showSpaceData = true;
+                _spaceData = clicked.GetSpaceInfo();
+                _cameraPivot.position = hit.collider.gameObject.transform.position;
+                _selectedSpace = clicked;
+            }
+        }
+        else
+        {
+            _selectedSpace = null;
+            _showSpaceData = false;
+            _cameraPivot.position = new Vector3(_gridSize.x / 2, 0, _gridSize.z / 2) * _voxelSize;
+        }
+        return clicked;
+    }
+
+    //Animation IEnumerators
     IEnumerator AnimateGeneration()
     {
         var flatVoxels = _spaces.SelectMany(v => v.Voxels).ToList();
@@ -585,7 +641,7 @@ public class AI_PlanAnalyzer : MonoBehaviour
         yield return new WaitForEndOfFrame();
     }
 
-    //Drawing
+    //Drawing methods and functions
 
     void DrawConnections()
     {
@@ -607,7 +663,18 @@ public class AI_PlanAnalyzer : MonoBehaviour
 
     void DrawSpaces()
     {
-        Drawing.DrawSpaces(_spaces, _grid);
+        foreach (var space in _spaces)
+        {
+            if (space != _selectedSpace)
+            {
+                Drawing.DrawSpace(space, _grid, false);
+            }
+            else
+            {
+                Drawing.DrawSpace(space, _grid, true);
+            }
+        }
+        
     }
 
     void DrawState()
@@ -643,6 +710,7 @@ public class AI_PlanAnalyzer : MonoBehaviour
             }
         }
     }
+    
     void DrawWalkable()
     {
         foreach (var voxel in _usedWalkables)
@@ -650,7 +718,7 @@ public class AI_PlanAnalyzer : MonoBehaviour
             Drawing.DrawCube(voxel.Center, _grid.VoxelSize, 0.25f);
         }
     }
-
+    
     void DrawVoxelList(List<Voxel> input)
     {
         foreach (var voxel in input)
@@ -658,7 +726,7 @@ public class AI_PlanAnalyzer : MonoBehaviour
             Drawing.DrawCube(voxel.Center + new Vector3(0,0.5f,0), _grid.VoxelSize, 0.25f);
         }
     }
-
+    
     void DrawPartsBoundaries()
     {
         foreach (var voxel in _partsBoundaries)
@@ -666,7 +734,7 @@ public class AI_PlanAnalyzer : MonoBehaviour
             Drawing.DrawCubeTransparent(voxel.Center + new Vector3(0f, _voxelSize, 0f), _voxelSize);
         }
     }
-
+    
     void DrawOrigins()
     {
         foreach (var origins in _origins)
@@ -677,8 +745,8 @@ public class AI_PlanAnalyzer : MonoBehaviour
             }
         }
     }
-
-    void DrawTags()
+    
+    void DrawPartTags()
     {
         if (_drawTags)
         {
@@ -697,8 +765,26 @@ public class AI_PlanAnalyzer : MonoBehaviour
         }
     }
 
-    
+    void DrawSpaceTags()
+    {
+        if (_showSpaces)
+        {
+            float tagHeight = 3f;
+            Vector2 tagSize = new Vector2(80, 20);
+            foreach (var space in _spaces)
+            {
+                string spaceName = space.Name;
+                Vector3 tagWorldPos = space.GetCenter() + (Vector3.up * tagHeight);
 
+                var t = _cam.WorldToScreenPoint(tagWorldPos);
+                Vector2 tagPos = new Vector2(t.x - (tagSize.x / 2), Screen.height - t.y);
+
+                GUI.Box(new Rect(tagPos, tagSize), spaceName, "spaceTag");
+            }
+        }
+    }
+
+    //GUI Controls and Settings
     private void OnGUI()
     {
         GUI.skin = _skin;
@@ -711,7 +797,11 @@ public class AI_PlanAnalyzer : MonoBehaviour
         int i = 1;
 
         //Draw Part tags
-        DrawTags();
+        DrawPartTags();
+
+        //Draw Spaces tags
+        DrawSpaceTags();
+        
         //Logo
         GUI.DrawTexture(new Rect(leftPad, -10, 128, 128), Resources.Load<Texture>("Textures/PP_Logo"));
 
@@ -724,7 +814,7 @@ public class AI_PlanAnalyzer : MonoBehaviour
         //Title
         GUI.Box(new Rect(180, 30, 500, 25), "AI Plan Analyser", "title");
 
-        if (!_testFloor)
+        if (!_testMode)
         {
             //Output message to be displayed out of test mode
             _outputMessage = "Adjust the slider to define how many parts should be created." + 
@@ -821,18 +911,31 @@ public class AI_PlanAnalyzer : MonoBehaviour
         if (GUI.Button(new Rect(leftPad, windowSize - ((fieldHeight + topPad) * count++), fieldWidth, fieldHeight), "Spaces"))
         {
             _showSpaces = !_showSpaces;
+            //Change the visibility of the spaces' InfoArrows
+            foreach (var space in _spaces)
+            {
+                space.InfoArrowVisibility(_showSpaces);
+            }
         }
 
         //Debug Message
         _debugMessage = "";
-        for (int i = 0; i < _compiledMessage.Length; i++)
+        if (_showSpaces && _showSpaceData)
         {
-            var line = _compiledMessage[i];
-            if (line != "escape")
+            _debugMessage = _spaceData;
+        }
+        else
+        {
+            for (int i = 0; i < _compiledMessage.Length; i++)
             {
-                _debugMessage += line + '\n';
+                var line = _compiledMessage[i];
+                if (line != "escape")
+                {
+                    _debugMessage += line + '\n';
+                }
             }
         }
+        
 
         GUI.Box(new Rect(leftPad, topPad, fieldWidth, fieldHeight), _debugMessage, "outputMessage");
     }

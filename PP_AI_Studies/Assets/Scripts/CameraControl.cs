@@ -14,13 +14,13 @@ public class CameraControl : MonoBehaviour
     private Transform _Parent;
 
     private Vector3 _LocalRotation;
-    private float _CameraDistance = 50f;
+    private float _CameraDistance = 25f;
 
     public float MouseSensitivity = 4f;
     public float ScrollSensitvity = 2f;
     public float OrbitDampening = 10f;
     public float ScrollDampening = 6f;
-    float CamMinAngle = -90f;
+    float CamMinAngle = 2f;
     float CamMaxAngle = 90f;
 
 
