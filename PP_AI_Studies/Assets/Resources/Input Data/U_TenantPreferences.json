@@ -1,0 +1,34 @@
+{
+  "Tenants": [
+    {
+      "Name": "David Doria",
+      "AreaPrefWork_S": "32_100",
+      "AreaPrefLeisure_S": "32_100"
+    },
+    {
+      "Name": "Keshav Ramaswami",
+      "AreaPrefWork_S": "28_50",
+      "AreaPrefLeisure_S": "28_100"
+    },
+    {
+      "Name": "Shan Guo",
+      "AreaPrefWork_S": "30_80",
+      "AreaPrefLeisure_S": "40_100"
+    },
+    {
+      "Name": "Xuan Kiko Zhang",
+      "AreaPrefWork_S": "24_60",
+      "AreaPrefLeisure_S": "50_300"
+    },
+    {
+      "Name": "Albus Dumbledore",
+      "AreaPrefWork_S": "12_42",
+      "AreaPrefLeisure_S": "52_300"
+    },
+    {
+      "Name": "Severus Snape",
+      "AreaPrefWork_S": "12_24",
+      "AreaPrefLeisure_S": "12_24"
+    }
+  ]
+}

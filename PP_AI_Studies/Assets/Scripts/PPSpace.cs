@@ -15,8 +15,20 @@ public class PPSpace : IEquatable<PPSpace>
     public HashSet<Vector3Int> Indices = new HashSet<Vector3Int>();
     public string OCIndexes; // Used to read Space data from Json file
     public string Name;
-    public Tenant Tenant;
+
     public bool Occupied;
+    private Tenant _occupyingTenant;
+    private PPSpaceRequest _usedRequest;
+    private int _durationLeft;
+
+    //The average center of this space, used to create the data exposer
+    Vector3 _center => new Vector3(
+        Indices.Average(i => (float)i.x),
+        0,
+        Indices.Average(i => (float)i.z)) * _grid.VoxelSize;
+
+    //Game object used to visualize space data
+    GameObject _infoArrow;
 
     //Boudary voxels are voxels which have at least
     //one face neighbour which isn't part of its ParentSpace
@@ -26,13 +38,19 @@ public class PPSpace : IEquatable<PPSpace>
         || v.GetFaceNeighbours().ToList().Count < 4);
 
     //Size | Scale Parameters
-    public int nVoxels => Voxels.Count; //This represents the Area of the space.
+    public int Area => Voxels.Count; //In voxel units
+   
     //Average dimensions in the X and Z directions. 
     //Does not ignore jagged edges / broken lengths of the space
     //Use is still unclear, might help later
+    
     public int AverageXWidth => (int) Voxels.GroupBy(v => v.Index.z).Select(r => r.ToList().Count).Average();
+    
     public int AverageZWidth => (int)Voxels.GroupBy(v => v.Index.x).Select(r => r.ToList().Count).Average();
 
+    //Defines if a space should be regarded as spare given its average widths and area 
+    public bool IsSpare => AverageXWidth < 6 || AverageZWidth < 6 || Area < 32? true : false;
+    
     //Connectivity Parameters
     //Get from the boundary voxels, the ones that represent connections
     //to other spaces
@@ -87,14 +105,13 @@ public class PPSpace : IEquatable<PPSpace>
         }
     }
 
-    //The average center of this space, used to create the data exposer
-    Vector3 _center => new Vector3(
-        Indices.Average(i => (float)i.x), 
-        0, 
-        Indices.Average(i => (float)i.z)) * _grid.VoxelSize;
-
-    //Game object used to visualize space data
-    GameObject _infoArrow;
+    //Scoring fields and properties
+    public bool Reconfigure = false;
+    public int TimesUsed = 0;
+    public float AreaScore = 0.50f;
+    private float _areaRating = 0.00f;
+    private int _areaIncrease = 0;
+    private int _areaDecrease = 0;
     
     //
     //CONSTRUCTORS
@@ -154,12 +171,74 @@ public class PPSpace : IEquatable<PPSpace>
         return orphans;
     }
 
+    public void OccupySpace(PPSpaceRequest request)
+    {
+        Occupied = true;
+        _usedRequest = request;
+        _durationLeft = _usedRequest.Duration;
+        _occupyingTenant = request.Tenant;
+        _occupyingTenant.SetSpaceToIcon(this, _grid);
+    }
+
+    public void UseSpace()
+    {
+        if (_durationLeft == 0)
+        {
+            TimesUsed++;
+            ReleaseSpace();
+        }
+        else
+        {
+            _durationLeft--;
+        }
+    }
+
+    void ReleaseSpace()
+    {
+        EvaluateSpace();
+        _occupyingTenant.ReleaseIcon();
+        Occupied = false;
+        _usedRequest = null;
+        _durationLeft = 0;
+        _occupyingTenant = null;
+        Debug.Log($"{Name} has been released");
+    }
+
+    void EvaluateSpace()
+    {
+        //first for AREA preferences [this the only implemented so far]
+        //Reading and Evaluation is ok, positive feedback diferentiation still not implemented
+        var requestFunction = _usedRequest.Function;
+        var tenantAreaPref = _occupyingTenant.AreaPreferences[requestFunction];
+        var tenantAreaMin = tenantAreaPref[0]; //This is voxel units per person
+        var tenantAreaMax = tenantAreaPref[1]; //This is voxel units per person
+
+        if (Area < tenantAreaMin * _usedRequest.Population)
+        {
+            _areaIncrease++;
+            Debug.Log($"{_occupyingTenant} Feedback: {Name} too small");
+        }
+        else if (Area > tenantAreaMax * _usedRequest.Population)
+        {
+            _areaDecrease++;
+            Debug.Log($"{_occupyingTenant.Name} Feedback: {Name} too big");
+        }
+        else
+        {
+            _areaRating += 1.00f;
+            Debug.Log($"{_occupyingTenant} Feedback: {Name} good enough");
+        }
+
+        //Update area score
+        AreaScore = _areaRating / TimesUsed;
+    }
+
     public void CreateArrow()
     {
         //Instantiates the InfoArrow GameObject on the average center of the space
         //and sets this space to be referenced by the arrow
         _infoArrow = GameObject.Instantiate(Resources.Load<GameObject>("GameObjects/InfoArrow"));
-        _infoArrow.transform.position = _center + new Vector3(0,1.5f,0);
+        _infoArrow.transform.position = _center + new Vector3(0,1.75f,0);
         _infoArrow.GetComponent<InfoArrow>().SetSpace(this);
     }
 
@@ -178,7 +257,7 @@ public class PPSpace : IEquatable<PPSpace>
         string nameHeader = $"[{Name}]";
         
         string sizeHeader = $"[Size Parameters]";
-        string area = $"Area: {nVoxels} voxels";
+        string area = $"Area: {Area} voxels";
         string averageX = $"Average X Width: {AverageXWidth} voxels";
         string averageZ = $"Average Z Width: {AverageZWidth} voxels";
 
@@ -197,6 +276,28 @@ public class PPSpace : IEquatable<PPSpace>
             neighbours += tab + tab + name + ": " + length + "voxels" + breakLine;
 
         }
+
+        string usageHeader = "[Usage Data]";
+        string timesUsed = $"Times used: {TimesUsed.ToString()}";
+        string currentRating = $" Current Rating: {_areaRating.ToString()}";
+        string areaScore = $"Area Score: {AreaScore.ToString()}";
+        string reconfigText;
+        if (Reconfigure)
+        {
+            if (_areaDecrease > _areaIncrease)
+            {
+                reconfigText = $"Reconfiguration for area reduction requested";
+            }
+            else
+            {
+                reconfigText = $"Reconfiguration for area increment requested";
+            }
+        }
+        else
+        {
+            reconfigText = "No reconfiguration required";
+        }
+
         output = nameHeader + breakLine +
             sizeHeader + breakLine +
             tab + area + breakLine +
@@ -208,7 +309,13 @@ public class PPSpace : IEquatable<PPSpace>
             tab + boundary + breakLine +
             tab + connectivityRatio + breakLine +
             tab + neighboursHeader + breakLine +
-            neighbours;
+            neighbours + breakLine + 
+            usageHeader + breakLine + 
+            tab + timesUsed + breakLine +
+            tab + currentRating + breakLine +
+            tab + areaScore + breakLine + 
+            tab + reconfigText
+            ;
 
         return output;
     }

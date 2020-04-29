@@ -24,26 +24,19 @@ public static class JSONReader
         return outList;
     }
 
-    public static List<PPSpaceRequest> ReadSpaceRequests(string file, List<Tenant> tenantList)
+    public static List<PPSpaceRequest> ReadSpaceRequests(string file, List<Tenant> existingTenants)
     {
+        //THE LIST OF TENANTS SHOULD BE RELATED TO THE LIST OF REQUESTS
+        var existingTenantNames = existingTenants.Select(t => t.Name).ToList();
+
         List<PPSpaceRequest> requests = new List<PPSpaceRequest>();
         string jsonString = Resources.Load<TextAsset>(file).text;
         PPRequestCollection requestList = JsonUtility.FromJson<PPRequestCollection>(jsonString);
-        var existingTenantNames = tenantList.Select(t => t.Name).ToList();
-        List<Tenant> newTenants = new List<Tenant>();
-        List<string> newTenantsNames = new List<string>();
+
         foreach (var request in requestList.Requests)
         {
-            if (existingTenantNames.Contains(request.TenantName))
-            {
-                request.Tenant = tenantList[existingTenantNames.IndexOf(request.TenantName)];
-            }
-            else
-            {
-                var nt = request.NewTenant();
-                newTenants.Add(nt);
-                newTenantsNames.Add(request.TenantName);
-            }
+            request.Tenant = existingTenants[existingTenantNames.IndexOf(request.TenantName)];
+
             request.Function = (SpaceFunction)System.Enum.Parse(typeof(SpaceFunction), request.FunctionName, false);
             var probabilities = request.Probabilities_S.Split('_');
             request.RequestProbability = new Dictionary<int, float>();
@@ -53,9 +46,32 @@ public static class JSONReader
                 request.RequestProbability.Add(i, probability);
             }
             requests.Add(request);
-            
         }
         return requests;
+    }
+
+    public static List<Tenant> ReadTenantsWithPreferences(string file, VoxelGrid grid)
+    {
+        //THE LIST OF TENANTS SHOULD BE RELATED TO THE LIST OF REQUESTS
+        //This is set up to read only area preferences so far. Updates must check for references
+        List<Tenant> tenants = new List<Tenant>();
+        string jsonString = Resources.Load<TextAsset>(file).text;
+        TenantCollection tenantList = JsonUtility.FromJson<TenantCollection>(jsonString);
+        foreach (var tenant in tenantList.Tenants)
+        {
+            tenant.AssociateGrid(grid);
+            tenant.AreaPreferences = new Dictionary<SpaceFunction, int[]>();
+            var areaWorkPref = tenant.AreaPrefWork_S.Split('_').Select(p => int.Parse(p)).ToArray();
+            var areaLeisurePref = tenant.AreaPrefLeisure_S.Split('_').Select(p => int.Parse(p)).ToArray();
+            //Only work and leisure functions and area preferences implemented
+            tenant.AreaPreferences.Add(SpaceFunction.Work, areaWorkPref);
+            tenant.AreaPreferences.Add(SpaceFunction.Leisure, areaLeisurePref);
+
+            tenant.CreateUserIcon();
+            tenants.Add(tenant);
+        }
+
+        return tenants;
     }
 
     public static List<StructuralPart> ReadStructureAsList(VoxelGrid grid, string file)

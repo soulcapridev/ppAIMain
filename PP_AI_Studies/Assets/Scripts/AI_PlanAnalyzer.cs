@@ -20,12 +20,21 @@ public class AI_PlanAnalyzer : MonoBehaviour
     string _structureFile;
     Vector3Int _gridSize;
 
+    int _frame = 0;
+
     bool _testMode = true;
     
     float _voxelSize = 0.375f;
     int _spaceMinimumArea = 20; //in voxel ammount
     int _ammountOfComponents = 10;
+    
     int _day = 0;
+    int _hour = 0;
+    string[] _weekdaysNames = { "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday" };
+    int _currentWeekDay = 0;
+    float _hourStep = 0.05f; //in seconds, represents a virtual hour
+    string _dateTimeNow;
+    bool _timePause;
 
     List<Part> _existingParts = new List<Part>();
     List<PPSpace> _spaces = new List<PPSpace>();
@@ -105,9 +114,8 @@ public class AI_PlanAnalyzer : MonoBehaviour
             ReadSpaces(spacesFile);
         }
 
+        _tenants = JSONReader.ReadTenantsWithPreferences("Input Data/U_TenantPreferences", _grid);
         _spaceRequests = JSONReader.ReadSpaceRequests("Input Data/U_SpaceRequests", _tenants);
-        _tenants = _spaceRequests.Select(s => s.Tenant).Distinct().ToList();
-        print(_tenants.Count);
         _cameraPivot.position = new Vector3(_gridSize.x / 2, 0, _gridSize.z / 2) * _voxelSize;
         
         //Read CSV to create the floor
@@ -115,6 +123,9 @@ public class AI_PlanAnalyzer : MonoBehaviour
         
         //Read JSON to create structural parts
         ReadStructure(_structureFile);
+
+        //Start the daily progression coroutine
+        StartCoroutine(DailyProgression());
     }
 
     void Update()
@@ -150,12 +161,21 @@ public class AI_PlanAnalyzer : MonoBehaviour
         if (Input.GetKeyDown(KeyCode.D)) _showDebug = !_showDebug;
 
         Drawing.DrawVoxelColor(_toDraw, _toColor, _voxelSize);
-        //StartCoroutine(SaveScreenshot());
+        StartCoroutine(SaveScreenshot());
     }
 
     //
     //METHODS AND FUNCTIONS
-    //
+    //    
+    void PopulateRandomConfigurable(int amt)
+    {
+        for (int i = 0; i < amt; i++)
+        {
+            ConfigurablePart p = new ConfigurablePart(_grid, _existingParts);
+            _existingParts.Add(p);
+        }
+    }
+    
     void DefinePartsBoundaries()
     {
         Stopwatch mainStopwatch = new Stopwatch();
@@ -562,15 +582,6 @@ public class AI_PlanAnalyzer : MonoBehaviour
         }
     }
 
-    void PopulateRandomConfigurable(int amt)
-    {
-        for (int i = 0; i < amt; i++)
-        {
-            ConfigurablePart p = new ConfigurablePart(_grid, _existingParts);
-            _existingParts.Add(p);
-        }
-    }
-
     double VoxelDistance(Voxel s, Voxel t)
     {
         var dif = s.Center - t.Center;
@@ -599,11 +610,101 @@ public class AI_PlanAnalyzer : MonoBehaviour
         }
         else
         {
+            _spaceData = null;
             _selectedSpace = null;
             _showSpaceData = false;
             _cameraPivot.position = new Vector3(_gridSize.x / 2, 0, _gridSize.z / 2) * _voxelSize;
         }
         return clicked;
+    }
+
+    IEnumerator DailyProgression()
+    {
+        while (_day < 365)
+        {
+            if (!_timePause)
+            {
+                if (_hour % 12 == 0)
+                {
+                    CheckSpaces();
+                }
+                _dateTimeNow = $"Day {_day}, {_weekdaysNames[_currentWeekDay]}, {_hour}:00";
+                float hourProbability = Random.value;
+                foreach (var request in _spaceRequests)
+                {
+                    if (request.StartTime == _hour)
+                    {
+                        var rProbability = request.RequestProbability[_currentWeekDay];
+                        if (rProbability >= hourProbability)
+                        {
+                            RequestSpace(request);
+                        }
+                    }
+                }
+                var occupiedSpaces = _spaces.Where(s => s.Occupied);
+                foreach (var space in occupiedSpaces)
+                {
+                    space.UseSpace();
+                }
+
+                NextHour();
+                //UpdateSpaceData();
+                yield return new WaitForSeconds(_hourStep);
+            }
+            else
+            {
+                yield return null;
+            }
+        }
+    }
+
+    void NextHour()
+    {
+        _hour++;
+        if (_hour % 24 == 0)
+        {
+            _hour = 0;
+            _day++;
+            _currentWeekDay++;
+        }
+        if (_currentWeekDay > 6) _currentWeekDay = 0;
+    }
+
+    void RequestSpace(PPSpaceRequest request)
+    {
+        var requestArea = request.Population * 8; //This considers that 1 person requires 8 voxels (~1m²)
+        var availableSpaces = _spaces.Where(s => !s.Occupied && !s.IsSpare);
+        PPSpace bestSuited = availableSpaces.MaxBy(s => s.Area);
+        foreach (var space in availableSpaces)
+        {
+            var spaceArea = space.Area;
+            
+            if (spaceArea >= requestArea && spaceArea < bestSuited.Area)
+            {
+                bestSuited = space;
+            }  
+        }
+        bestSuited.OccupySpace(request);
+        print($"Assinged {bestSuited.Name} to {request.Tenant.Name} at {_dateTimeNow}");
+    }
+
+    void CheckSpaces()
+    {
+        //Checking spaces for reconfiguration
+        foreach (var space in _spaces)
+        {
+            if (space.TimesUsed > 10)
+            {
+                if (!space.Reconfigure)
+                {
+                    if (space.AreaScore < 0.20f)
+                    {
+                        space.Reconfigure = true;
+                    }
+                }
+            }
+            
+        }
     }
 
     //Animation IEnumerators
@@ -635,9 +736,9 @@ public class AI_PlanAnalyzer : MonoBehaviour
 
     IEnumerator SaveScreenshot()
     {
-        string file = $"SavedFrames/SpaceAnalysis/Frame_{_day}.png";
+        string file = $"SavedFrames/SpaceAnalysis/Frame_{_frame}.png";
         ScreenCapture.CaptureScreenshot(file, 2);
-        _day++;
+        _frame++;
         yield return new WaitForEndOfFrame();
     }
 
@@ -665,14 +766,30 @@ public class AI_PlanAnalyzer : MonoBehaviour
     {
         foreach (var space in _spaces)
         {
-            if (space != _selectedSpace)
+            Color color = new Color();
+            if (space.Reconfigure)
             {
-                Drawing.DrawSpace(space, _grid, false);
+                if (space != _selectedSpace)
+                {
+                    color = new Color(0.7f, 0.1f, 0.1f, 0.70f);
+                }
+                else
+                {
+                    color = new Color(0.90f, 0.70f, 0.0f, 0.70f);
+                }
             }
             else
             {
-                Drawing.DrawSpace(space, _grid, true);
+                if (space != _selectedSpace)
+                {
+                    color = new Color(0.9f, 0.9f, 0.9f, 0.70f);
+                }
+                else
+                {
+                    color = new Color(0.85f, 1.0f, 0.0f, 0.70f);
+                }
             }
+            Drawing.DrawSpace(space, _grid, color);
         }
         
     }
@@ -769,8 +886,8 @@ public class AI_PlanAnalyzer : MonoBehaviour
     {
         if (_showSpaces)
         {
-            float tagHeight = 3f;
-            Vector2 tagSize = new Vector2(80, 20);
+            float tagHeight = 3.5f;
+            Vector2 tagSize = new Vector2(60, 15);
             foreach (var space in _spaces)
             {
                 string spaceName = space.Name;
@@ -813,6 +930,16 @@ public class AI_PlanAnalyzer : MonoBehaviour
 
         //Title
         GUI.Box(new Rect(180, 30, 500, 25), "AI Plan Analyser", "title");
+
+        //Date and Time _dateTimeNow
+        GUI.Box(new Rect(Screen.width - 530, 30, 500, 25), _dateTimeNow, "dateTime");
+
+        //Pause Button
+        if (GUI.Button(new Rect(leftPad, Screen.height - leftPad - 50 , 50, 50),
+            Resources.Load<Texture>("Textures/PauseButton")))
+        {
+            _timePause = !_timePause;
+        }
 
         if (!_testMode)
         {
@@ -922,7 +1049,7 @@ public class AI_PlanAnalyzer : MonoBehaviour
         _debugMessage = "";
         if (_showSpaces && _showSpaceData)
         {
-            _debugMessage = _spaceData;
+            _debugMessage = _selectedSpace.GetSpaceInfo();
         }
         else
         {
@@ -935,8 +1062,6 @@ public class AI_PlanAnalyzer : MonoBehaviour
                 }
             }
         }
-        
-
-        GUI.Box(new Rect(leftPad, topPad, fieldWidth, fieldHeight), _debugMessage, "outputMessage");
+        GUI.Box(new Rect(leftPad, topPad, fieldWidth, fieldHeight), _debugMessage, "debugMessage");
     }
 }

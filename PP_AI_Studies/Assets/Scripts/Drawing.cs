@@ -195,14 +195,14 @@ class Drawing : MonoBehaviour
         }
     }
 
-    public static void DrawSpace(PPSpace space, VoxelGrid grid, bool selected)
+    public static void DrawSpace(PPSpace space, VoxelGrid grid, Color color)
     {
         var voxelSize = grid.VoxelSize;
-        var color = new Color(0.9f, 0.9f, 0.9f, 0.70f);
-        if (selected)
-        {
-            color = new Color(0.85f, 1.0f, 0.0f, 0.70f);
-        }
+        //var color = new Color(0.9f, 0.9f, 0.9f, 0.70f);
+        //if (selected)
+        //{
+        //    color = new Color(0.85f, 1.0f, 0.0f, 0.70f);
+        //}
 
         _properties.SetColor("_Color", color);
 
@@ -212,7 +212,7 @@ class Drawing : MonoBehaviour
             var matrix = Matrix4x4.TRS(
             center,
             Quaternion.identity,
-            Vector3.one * (voxelSize * 0.99f)
+            Vector3.one * (voxelSize * 0.85f)
             );
 
             Graphics.DrawMesh(_unitBox, matrix, _instance._transparent, 0, null, 0, _properties);

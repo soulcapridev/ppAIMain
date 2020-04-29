@@ -59,4 +59,23 @@ static class Util
 
         return minItem;
     }
+
+    public static T MaxBy<T>(this IEnumerable<T> items, Func<T, double> selector)
+    {
+        double maxValue = double.MinValue;
+        T maxItem = items.First();
+
+        foreach (var item in items)
+        {
+            var value = selector(item);
+
+            if (value > maxValue)
+            {
+                maxValue = value;
+                maxItem = item;
+            }
+        }
+
+        return maxItem;
+    }
 }

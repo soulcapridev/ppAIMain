@@ -5,18 +5,18 @@ using UnityEngine;
 public class InfoArrow : MonoBehaviour
 {
     //The space represented by the arrow
-    private PPSpace _infoSpace;
+    private PPSpace _space;
 
     int _angle = 0;
 
     public PPSpace GetSpace()
     {
-        return _infoSpace;
+        return _space;
     }
 
     public void SetSpace(PPSpace space)
     {
-        _infoSpace = space;
+        _space = space;
     }
 
     public void SelfDestroy()
