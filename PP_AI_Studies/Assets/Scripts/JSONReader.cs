@@ -54,19 +54,27 @@ public static class JSONReader
     {
         //THE LIST OF TENANTS SHOULD BE RELATED TO THE LIST OF REQUESTS
         //This is set up to read only area preferences so far. Updates must check for references
+        //Only Work and Leisure space functions implemented
         List<Tenant> tenants = new List<Tenant>();
         string jsonString = Resources.Load<TextAsset>(file).text;
         TenantCollection tenantList = JsonUtility.FromJson<TenantCollection>(jsonString);
         foreach (var tenant in tenantList.Tenants)
         {
             tenant.AssociateGrid(grid);
+            //Tenant Area Preferences
             tenant.AreaPreferences = new Dictionary<SpaceFunction, int[]>();
             var areaWorkPref = tenant.AreaPrefWork_S.Split('_').Select(p => int.Parse(p)).ToArray();
             var areaLeisurePref = tenant.AreaPrefLeisure_S.Split('_').Select(p => int.Parse(p)).ToArray();
-            //Only work and leisure functions and area preferences implemented
             tenant.AreaPreferences.Add(SpaceFunction.Work, areaWorkPref);
             tenant.AreaPreferences.Add(SpaceFunction.Leisure, areaLeisurePref);
 
+            //Tenant Connectivity Preferences
+            tenant.ConnectivityPreferences = new Dictionary<SpaceFunction, float[]>();
+            var connecWorkPref = tenant.ConnectivityPrefWork_S.Split('_').Select(p => float.Parse(p) / 100.00f).ToArray();
+            var connecLeisurePref = tenant.ConnectivityPrefLeisure_S.Split('_').Select(p => float.Parse(p) / 100.00f).ToArray();
+            Debug.Log($"{tenant.Name} min work con {connecLeisurePref[0]}");
+            tenant.ConnectivityPreferences.Add(SpaceFunction.Work, connecWorkPref);
+            tenant.ConnectivityPreferences.Add(SpaceFunction.Leisure, connecLeisurePref);
             tenant.CreateUserIcon();
             tenants.Add(tenant);
         }

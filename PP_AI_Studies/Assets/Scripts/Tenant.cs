@@ -18,8 +18,14 @@ public class Tenant : IEquatable<Tenant>
     //This represents the ammount of voxel units per person in the population occupying the space
     public Dictionary<SpaceFunction, int[]> AreaPreferences = new Dictionary<SpaceFunction, int[]>();
 
+    //Connectivity preferences are stored in a linear, 2 instances array. [0] = min, [1] = max
+    //This represents the preffered Connectivity ratio of the space per function
+    public Dictionary<SpaceFunction, float[]> ConnectivityPreferences = new Dictionary<SpaceFunction, float[]>();
+
     public string AreaPrefWork_S;
     public string AreaPrefLeisure_S;
+    public string ConnectivityPrefWork_S;
+    public string ConnectivityPrefLeisure_S;
 
     //
     //METHODS AND CONSTRUCTORS

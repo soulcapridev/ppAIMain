@@ -161,7 +161,7 @@ public class AI_PlanAnalyzer : MonoBehaviour
         if (Input.GetKeyDown(KeyCode.D)) _showDebug = !_showDebug;
 
         Drawing.DrawVoxelColor(_toDraw, _toColor, _voxelSize);
-        StartCoroutine(SaveScreenshot());
+        //StartCoroutine(SaveScreenshot());
     }
 
     //
@@ -695,15 +695,24 @@ public class AI_PlanAnalyzer : MonoBehaviour
         {
             if (space.TimesUsed > 10)
             {
-                if (!space.Reconfigure)
+                if (space.AreaScore < 0.20f)
                 {
-                    if (space.AreaScore < 0.20f)
-                    {
-                        space.Reconfigure = true;
-                    }
+                    space.Reconfigure_Area = true;
+                }
+                else
+                {
+                    space.Reconfigure_Area = false;
+                }
+
+                if (space.ConnectivityScore < 0.20f)
+                {
+                    space.Reconfigure_Connectivity = true;
+                }
+                else
+                {
+                    space.Reconfigure_Connectivity = false;
                 }
             }
-            
         }
     }
 

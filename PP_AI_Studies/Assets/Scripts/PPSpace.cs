@@ -106,12 +106,20 @@ public class PPSpace : IEquatable<PPSpace>
     }
 
     //Scoring fields and properties
-    public bool Reconfigure = false;
+    public bool Reconfigure => Reconfigure_Area || Reconfigure_Connectivity ? true : false;
     public int TimesUsed = 0;
+
+    public bool Reconfigure_Area = false;
     public float AreaScore = 0.50f;
     private float _areaRating = 0.00f;
     private int _areaIncrease = 0;
     private int _areaDecrease = 0;
+
+    public bool Reconfigure_Connectivity = false;
+    public float ConnectivityScore = 0.50f;
+    private float _connectivityRating = 0.00f;
+    private int _connectivityIncrease = 0;
+    private int _connectivityDecrease = 0;
     
     //
     //CONSTRUCTORS
@@ -195,7 +203,8 @@ public class PPSpace : IEquatable<PPSpace>
 
     void ReleaseSpace()
     {
-        EvaluateSpace();
+        EvaluateSpaceArea();
+        EvaluateSpaceConnectivity();
         _occupyingTenant.ReleaseIcon();
         Occupied = false;
         _usedRequest = null;
@@ -204,10 +213,10 @@ public class PPSpace : IEquatable<PPSpace>
         Debug.Log($"{Name} has been released");
     }
 
-    void EvaluateSpace()
+    void EvaluateSpaceArea()
     {
-        //first for AREA preferences [this the only implemented so far]
-        //Reading and Evaluation is ok, positive feedback diferentiation still not implemented
+        //Evaluate for AREA preferences
+        //Reading and Evaluation is ok, positive feedback diferentiation / scale still not implemented
         var requestFunction = _usedRequest.Function;
         var tenantAreaPref = _occupyingTenant.AreaPreferences[requestFunction];
         var tenantAreaMin = tenantAreaPref[0]; //This is voxel units per person
@@ -216,7 +225,7 @@ public class PPSpace : IEquatable<PPSpace>
         if (Area < tenantAreaMin * _usedRequest.Population)
         {
             _areaIncrease++;
-            Debug.Log($"{_occupyingTenant} Feedback: {Name} too small");
+            Debug.Log($"{_occupyingTenant.Name} Feedback: {Name} too small");
         }
         else if (Area > tenantAreaMax * _usedRequest.Population)
         {
@@ -226,11 +235,39 @@ public class PPSpace : IEquatable<PPSpace>
         else
         {
             _areaRating += 1.00f;
-            Debug.Log($"{_occupyingTenant} Feedback: {Name} good enough");
+            Debug.Log($"{_occupyingTenant.Name} Feedback: {Name} good enough");
         }
 
         //Update area score
         AreaScore = _areaRating / TimesUsed;
+    }
+    
+    void EvaluateSpaceConnectivity()
+    {
+        //Evaluate for CONNECTIVITY preferences
+        var requestFunction = _usedRequest.Function;
+        var tenantConnectPref = _occupyingTenant.ConnectivityPreferences[requestFunction];
+        var tenantConnectMin = tenantConnectPref[0]; //This is a float (percentage)
+        var tenantConnectMax = tenantConnectPref[1]; //This is a float (percentage)
+
+        if (ConnectionRatio < tenantConnectMin)
+        {
+            _connectivityIncrease++;
+            Debug.Log($"{_occupyingTenant.Name} Feedback: {Name} too isolated, wanted {tenantConnectMin}, was {ConnectionRatio}");
+        }
+        else if (ConnectionRatio > tenantConnectMax)
+        {
+            _connectivityDecrease++;
+            Debug.Log($"{_occupyingTenant.Name} Feedback: {Name} not private enough");
+        }
+        else
+        {
+            _connectivityRating += 1.00f;
+            Debug.Log($"{_occupyingTenant.Name} Feedback: {Name} good enough");
+        }
+
+        //Update connectivity score
+        ConnectivityScore = _connectivityRating / TimesUsed;
     }
 
     public void CreateArrow()
@@ -279,23 +316,45 @@ public class PPSpace : IEquatable<PPSpace>
 
         string usageHeader = "[Usage Data]";
         string timesUsed = $"Times used: {TimesUsed.ToString()}";
-        string currentRating = $" Current Rating: {_areaRating.ToString()}";
+        string areaCurrentRating = $" Current Area Rating: {_areaRating.ToString()}";
         string areaScore = $"Area Score: {AreaScore.ToString()}";
-        string reconfigText;
-        if (Reconfigure)
+        string areaReconfigText;
+
+        string connectivityCurrentRating = $" Current Conect. Rating: {_connectivityRating.ToString()}";
+        string connectivityScore = $"Connect. Score: {ConnectivityScore.ToString()}";
+        string connectivityReconfigText;
+
+
+        if (Reconfigure_Area)
         {
             if (_areaDecrease > _areaIncrease)
             {
-                reconfigText = $"Reconfiguration for area reduction requested";
+                areaReconfigText = $"Reconfiguration for Area reduction requested";
             }
             else
             {
-                reconfigText = $"Reconfiguration for area increment requested";
+                areaReconfigText = $"Reconfiguration for Area increment requested";
             }
         }
         else
         {
-            reconfigText = "No reconfiguration required";
+            areaReconfigText = "No reconfiguration required for Area";
+        }
+        
+        if (Reconfigure_Connectivity)
+        {
+            if (_connectivityDecrease > _connectivityIncrease)
+            {
+                connectivityReconfigText = $"Reconfiguration for Connectivity reduction requested";
+            }
+            else
+            {
+                connectivityReconfigText = $"Reconfiguration for Connectivity increase requested";
+            }
+        }
+        else
+        {
+            connectivityReconfigText = "No reconfiguration required for Connectivity";
         }
 
         output = nameHeader + breakLine +
@@ -312,9 +371,12 @@ public class PPSpace : IEquatable<PPSpace>
             neighbours + breakLine + 
             usageHeader + breakLine + 
             tab + timesUsed + breakLine +
-            tab + currentRating + breakLine +
+            tab + areaCurrentRating + breakLine +
             tab + areaScore + breakLine + 
-            tab + reconfigText
+            tab + areaReconfigText + breakLine + 
+            tab + connectivityCurrentRating + breakLine +
+            tab + connectivityScore + breakLine +
+            tab + connectivityReconfigText
             ;
 
         return output;
