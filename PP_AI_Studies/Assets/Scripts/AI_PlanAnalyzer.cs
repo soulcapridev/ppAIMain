@@ -161,7 +161,7 @@ public class AI_PlanAnalyzer : MonoBehaviour
         if (Input.GetKeyDown(KeyCode.D)) _showDebug = !_showDebug;
 
         Drawing.DrawVoxelColor(_toDraw, _toColor, _voxelSize);
-        //StartCoroutine(SaveScreenshot());
+        StartCoroutine(SaveScreenshot());
     }
 
     //
